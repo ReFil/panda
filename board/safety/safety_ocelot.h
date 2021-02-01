@@ -1,55 +1,55 @@
-//Safety code for other and old_car
-//other based
+//Safety code for ocelot and old_car
+//ocelot based
 
 // global torque limit
-const int OTHER_MAX_TORQUE = 1500;       // max torque cmd allowed ever
+const int OCELOT_MAX_TORQUE = 1500;       // max torque cmd allowed ever
 
 // rate based torque limit + stay within actually applied
 // packet is sent at 100hz, so this limit is 1000/sec
-const int OTHER_MAX_RATE_UP = 10;        // ramp up slow
-const int OTHER_MAX_RATE_DOWN = 25;      // ramp down fast
-const int OTHER_MAX_TORQUE_ERROR = 350;  // max torque cmd in excess of torque motor
+const int OCELOT_MAX_RATE_UP = 10;        // ramp up slow
+const int OCELOT_MAX_RATE_DOWN = 25;      // ramp down fast
+const int OCELOT_MAX_TORQUE_ERROR = 350;  // max torque cmd in excess of torque motor
 
 // real time torque limit to prevent controls spamming
 // the real time limit is 1500/sec
-const int OTHER_MAX_RT_DELTA = 375;      // max delta torque allowed for real time checks
-const uint32_t OTHER_RT_INTERVAL = 250000;    // 250ms between real time checks
+const int OCELOT_MAX_RT_DELTA = 375;      // max delta torque allowed for real time checks
+const uint32_t OCELOT_RT_INTERVAL = 250000;    // 250ms between real time checks
 
 // longitudinal limits
-const int OTHER_MAX_ACCEL = 1500;        // 1.5 m/s2
-const int OTHER_MIN_ACCEL = -3000;       // -3.0 m/s2
+const int OCELOT_MAX_ACCEL = 1500;        // 1.5 m/s2
+const int OCELOT_MIN_ACCEL = -3000;       // -3.0 m/s2
 
-const int OTHER_ISO_MAX_ACCEL = 2000;        // 2.0 m/s2
-const int OTHER_ISO_MIN_ACCEL = -3500;       // -3.5 m/s2
+const int OCELOT_ISO_MAX_ACCEL = 2000;        // 2.0 m/s2
+const int OCELOT_ISO_MIN_ACCEL = -3500;       // -3.5 m/s2
 
-const int OTHER_STANDSTILL_THRSLD = 100;  // 1kph
+const int OCELOT_STANDSTILL_THRSLD = 100;  // 1kph
 
 // Roughly calculated using the offsets in openpilot +5%:
 // In openpilot: ((gas1_norm + gas2_norm)/2) > 15
 // gas_norm1 = ((gain_dbc*gas1) + offset1_dbc)
 // gas_norm2 = ((gain_dbc*gas2) + offset2_dbc)
 // In this safety: ((gas1 + gas2)/2) > THRESHOLD
-const int OTHER_GAS_INTERCEPTOR_THRSLD = 845;
-#define OTHER_GET_INTERCEPTOR(msg) (((GET_BYTE((msg), 0) << 8) + GET_BYTE((msg), 1) + (GET_BYTE((msg), 2) << 8) + GET_BYTE((msg), 3)) / 2) // avg between 2 tracks
+const int OCELOT_GAS_INTERCEPTOR_THRSLD = 845;
+#define OCELOT_GET_INTERCEPTOR(msg) (((GET_BYTE((msg), 0) << 8) + GET_BYTE((msg), 1) + (GET_BYTE((msg), 2) << 8) + GET_BYTE((msg), 3)) / 2) // avg between 2 tracks
 
-const CanMsg OTHER_TX_MSGS[] = {{0x283, 0, 7}, {0x2E6, 0, 8}, {0x2E7, 0, 8}, {0x33E, 0, 7}, {0x344, 0, 8}, {0x365, 0, 7}, {0x366, 0, 7}, {0x4CB, 0, 8},  // DSU bus 0
+const CanMsg OCELOT_TX_MSGS[] = {{0x283, 0, 7}, {0x2E6, 0, 8}, {0x2E7, 0, 8}, {0x33E, 0, 7}, {0x344, 0, 8}, {0x365, 0, 7}, {0x366, 0, 7}, {0x4CB, 0, 8},  // DSU bus 0
                                   {0x128, 1, 6}, {0x141, 1, 4}, {0x160, 1, 8}, {0x161, 1, 7}, {0x470, 1, 4},  // DSU bus 1
                                   {0x2E4, 0, 5}, {0x411, 0, 8}, {0x412, 0, 8}, {0x343, 0, 8}, {0x1D2, 0, 8},  // LKAS + ACC
                                   {0x200, 0, 6}};  // interceptor
 
-AddrCheckStruct other_rx_checks[] = {
+AddrCheckStruct ocelot_rx_checks[] = {
   {.msg = {{ 0xaa, 0, 8, .check_checksum = false, .expected_timestep = 12000U}}},
   {.msg = {{0x260, 0, 8, .check_checksum = true, .expected_timestep = 20000U}}},
   {.msg = {{0x1D2, 0, 8, .check_checksum = true, .expected_timestep = 30000U}}},
   {.msg = {{0x224, 0, 8, .check_checksum = false, .expected_timestep = 25000U},
            {0x226, 0, 8, .check_checksum = false, .expected_timestep = 25000U}}},
 };
-const int OTHER_RX_CHECKS_LEN = sizeof(other_rx_checks) / sizeof(other_rx_checks[0]);
+const int OCELOT_RX_CHECKS_LEN = sizeof(ocelot_rx_checks) / sizeof(ocelot_rx_checks[0]);
 
 // global actuation limit states
-int other_dbc_eps_torque_factor = 100;   // conversion factor for STEER_TORQUE_EPS in %: see dbc file
+int ocelot_dbc_eps_torque_factor = 100;   // conversion factor for STEER_TORQUE_EPS in %: see dbc file
 
-static uint8_t other_compute_checksum(CAN_FIFOMailBox_TypeDef *to_push) {
+static uint8_t ocelot_compute_checksum(CAN_FIFOMailBox_TypeDef *to_push) {
   int addr = GET_ADDR(to_push);
   int len = GET_LEN(to_push);
   uint8_t checksum = (uint8_t)(addr) + (uint8_t)((unsigned int)(addr) >> 8U) + (uint8_t)(len);
@@ -59,15 +59,15 @@ static uint8_t other_compute_checksum(CAN_FIFOMailBox_TypeDef *to_push) {
   return checksum;
 }
 
-static uint8_t other_get_checksum(CAN_FIFOMailBox_TypeDef *to_push) {
+static uint8_t ocelot_get_checksum(CAN_FIFOMailBox_TypeDef *to_push) {
   int checksum_byte = GET_LEN(to_push) - 1;
   return (uint8_t)(GET_BYTE(to_push, checksum_byte));
 }
 
-static int other_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
+static int ocelot_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
 
-  bool valid = addr_safety_check(to_push, other_rx_checks, OTHER_RX_CHECKS_LEN,
-                                 other_get_checksum, other_compute_checksum, NULL);
+  bool valid = addr_safety_check(to_push, ocelot_rx_checks, OCELOT_RX_CHECKS_LEN,
+                                 ocelot_get_checksum, ocelot_compute_checksum, NULL);
 
   if (valid && (GET_BUS(to_push) == 0)) {
     int addr = GET_ADDR(to_push);
@@ -78,7 +78,7 @@ static int other_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
       torque_meas_new = to_signed(torque_meas_new, 16);
 
       // scale by dbc_factor
-      torque_meas_new = (torque_meas_new * other_dbc_eps_torque_factor) / 100;
+      torque_meas_new = (torque_meas_new * ocelot_dbc_eps_torque_factor) / 100;
 
       // update array of sample
       update_sample(&torque_meas, torque_meas_new);
@@ -115,7 +115,7 @@ static int other_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
         int next_byte = i + 1;  // hack to deal with misra 10.8
         speed += (GET_BYTE(to_push, i) << 8) + GET_BYTE(to_push, next_byte) - 0x1a6f;
       }
-      vehicle_moving = ABS(speed / 4) > OTHER_STANDSTILL_THRSLD;
+      vehicle_moving = ABS(speed / 4) > OCELOT_STANDSTILL_THRSLD;
     }
 
     // most cars have brake_pressed on 0x226, corolla and rav4 on 0x224
@@ -127,8 +127,8 @@ static int other_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
     // sample gas interceptor
     if (addr == 0x201) {
       gas_interceptor_detected = 1;
-      int gas_interceptor = OTHER_GET_INTERCEPTOR(to_push);
-      gas_pressed = gas_interceptor > OTHER_GAS_INTERCEPTOR_THRSLD;
+      int gas_interceptor = OCELOT_GET_INTERCEPTOR(to_push);
+      gas_pressed = gas_interceptor > OCELOT_GAS_INTERCEPTOR_THRSLD;
 
       // TODO: remove this, only left in for gas_interceptor_prev test
       gas_interceptor_prev = gas_interceptor;
@@ -139,19 +139,16 @@ static int other_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
   return valid;
 }
 
-static int other_tx_hook(CAN_FIFOMailBox_TypeDef *to_send) {
+static int ocelot_tx_hook(CAN_FIFOMailBox_TypeDef *to_send) {
 
   int tx = 1;
   int addr = GET_ADDR(to_send);
   int bus = GET_BUS(to_send);
 
-  if (!msg_allowed(to_send, OTHER_TX_MSGS, sizeof(OTHER_TX_MSGS)/sizeof(OTHER_TX_MSGS[0]))) {
+  if (!msg_allowed(to_send, OCELOT_TX_MSGS, sizeof(OCELOT_TX_MSGS)/sizeof(OCELOT_TX_MSGS[0]))) {
     tx = 0;
   }
 
-  if (relay_malfunction) {
-    tx = 0;
-  }
 
   // Check if msg is sent on BUS 0
   if (bus == 0) {
@@ -165,23 +162,6 @@ static int other_tx_hook(CAN_FIFOMailBox_TypeDef *to_send) {
       }
     }
 
-    // ACCEL: safety check on byte 1-2
-    if (addr == 0x343) {
-      int desired_accel = (GET_BYTE(to_send, 0) << 8) | GET_BYTE(to_send, 1);
-      desired_accel = to_signed(desired_accel, 16);
-      if (!controls_allowed) {
-        if (desired_accel != 0) {
-          tx = 0;
-        }
-      }
-      bool violation = (unsafe_mode & UNSAFE_RAISE_LONGITUDINAL_LIMITS_TO_ISO_MAX)?
-        max_limit_check(desired_accel, OTHER_ISO_MAX_ACCEL, OTHER_ISO_MIN_ACCEL) :
-        max_limit_check(desired_accel, OTHER_MAX_ACCEL, OTHER_MIN_ACCEL);
-
-      if (violation) {
-        tx = 0;
-      }
-    }
 
     // STEER: safety check on bytes 2-3
     if (addr == 0x2E4) {
@@ -194,21 +174,21 @@ static int other_tx_hook(CAN_FIFOMailBox_TypeDef *to_send) {
       if (controls_allowed) {
 
         // *** global torque limit check ***
-        violation |= max_limit_check(desired_torque, OTHER_MAX_TORQUE, -OTHER_MAX_TORQUE);
+        violation |= max_limit_check(desired_torque, OCELOT_MAX_TORQUE, -OCELOT_MAX_TORQUE);
 
         // *** torque rate limit check ***
         violation |= dist_to_meas_check(desired_torque, desired_torque_last,
-          &torque_meas, OTHER_MAX_RATE_UP, OTHER_MAX_RATE_DOWN, OTHER_MAX_TORQUE_ERROR);
+          &torque_meas, OCELOT_MAX_RATE_UP, OCELOT_MAX_RATE_DOWN, OCELOT_MAX_TORQUE_ERROR);
 
         // used next time
         desired_torque_last = desired_torque;
 
         // *** torque real time rate limit check ***
-        violation |= rt_rate_limit_check(desired_torque, rt_torque_last, OTHER_MAX_RT_DELTA);
+        violation |= rt_rate_limit_check(desired_torque, rt_torque_last, OCELOT_MAX_RT_DELTA);
 
         // every RT_INTERVAL set the new limits
         uint32_t ts_elapsed = get_ts_elapsed(ts, ts_last);
-        if (ts_elapsed > OTHER_RT_INTERVAL) {
+        if (ts_elapsed > OCELOT_RT_INTERVAL) {
           rt_torque_last = desired_torque;
           ts_last = ts;
         }
@@ -235,14 +215,14 @@ static int other_tx_hook(CAN_FIFOMailBox_TypeDef *to_send) {
   return tx;
 }
 
-static void other_init(int16_t param) {
+static void ocelot_init(int16_t param) {
   controls_allowed = 0;
   relay_malfunction_reset();
   gas_interceptor_detected = 0;
-  other_dbc_eps_torque_factor = param;
+  ocelot_dbc_eps_torque_factor = param;
 }
 
-static int other_fwd_hook(int bus_num, CAN_FIFOMailBox_TypeDef *to_fwd) {
+static int ocelot_fwd_hook(int bus_num, CAN_FIFOMailBox_TypeDef *to_fwd) {
 
   int bus_fwd = -1;
   if (!relay_malfunction) {
@@ -265,12 +245,12 @@ static int other_fwd_hook(int bus_num, CAN_FIFOMailBox_TypeDef *to_fwd) {
   return bus_fwd;
 }
 
-const safety_hooks other_hooks = {
-  .init = other_init,
-  .rx = other_rx_hook,
-  .tx = other_tx_hook,
+const safety_hooks ocelot_hooks = {
+  .init = ocelot_init,
+  .rx = ocelot_rx_hook,
+  .tx = ocelot_tx_hook,
   .tx_lin = nooutput_tx_lin_hook,
-  .fwd = other_fwd_hook,
-  .addr_check = other_rx_checks,
-  .addr_check_len = sizeof(other_rx_checks)/sizeof(other_rx_checks[0]),
+  .fwd = ocelot_fwd_hook,
+  .addr_check = ocelot_rx_checks,
+  .addr_check_len = sizeof(ocelot_rx_checks)/sizeof(ocelot_rx_checks[0]),
 };

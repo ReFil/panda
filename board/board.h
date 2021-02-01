@@ -17,6 +17,7 @@
   #include "boards/dos.h"
 #else
   #include "boards/pedal.h"
+  #include "boards/ctrls.h"
 #endif
 
 void detect_board_type(void) {
@@ -44,6 +45,10 @@ void detect_board_type(void) {
     #ifdef PEDAL
       hw_type = HW_TYPE_PEDAL;
       current_board = &board_pedal;
+    #else
+    #ifdef CTRLS
+      hw_type = HW_TYPE_CTRLS;
+      current_board = &board_ctrls;
     #else
       hw_type = HW_TYPE_UNKNOWN;
       puts("Hardware type is UNKNOWN!\n");

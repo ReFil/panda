@@ -1,0 +1,27 @@
+This is the firmware for the ocelot HIM. It borrows a lot from panda.
+
+The HIM offers cruise control buttons to any car that was not equipped with them from factory
+
+This is the open source software. Note that it is not ready to use yet.
+
+== Test Plan ==
+TBD
+* Startup
+** Confirm STATE_FAULT_STARTUP
+* Timeout
+** Send value
+** Confirm value is output
+** Stop sending messages
+** Confirm value is passthru after 100ms
+** Confirm STATE_FAULT_TIMEOUT
+* Random values
+** Send random 6 byte messages
+** Confirm random values cause passthru
+** Confirm STATE_FAULT_BAD_CHECKSUM
+* Same message lockout
+** Send same message repeated
+** Confirm timeout behavior
+* Don't set enable
+** Confirm no output
+* Set enable and values
+** Confirm output
