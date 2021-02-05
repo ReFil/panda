@@ -248,7 +248,7 @@ volatile uint8_t encoderCount = 2;
 void TIM3_IRQ_Handler(void) {
   volatile static uint8_t ABs = 0;
   ABs = (ABs << 2) & 0x0f; //left 2 bits now contain the previous AB key read-out;
-  ABs |= (digitalRead(ENC_CLK) << 1) | digitalRead(ENC_DATA);
+  ABs |= (get_gpio_input(GPIOA, 8) << 1) | get_gpio_input(GPIOA, 9);
   encoderCount = 2;
   switch (ABs)
   {
@@ -268,18 +268,16 @@ void loop(void) {
   // read/write
 
 #ifdef ADC
-  uint8_t value;
+  uint32_t value;
   value = adc_get(ADCCHAN_ACCEL0);
   puth(value);
   puts("\n");
-  if(value<)
+  if(value < 1)
   {}
-  else if(value < & value >)
+  else if(value < 2& value > 1)
   {}
-  else if(value < & value > )
+  else if(value < 3& value > 2)
   {}
-  btns[0] = get_gpio_input(GPIOA, 8);
-  btns[1] = get_gpio_input(GPIOA, 9);
 #else
 #ifdef ENCODER
   switch (encoderCount) {
@@ -364,7 +362,8 @@ int main(void) {
   timer_init(TIM3, 15);
   NVIC_EnableIRQ(TIM3_IRQn);
 #endif
-
+  btns = {0, 0, 0, 0};
+  update_eon();
   watchdog_init();
 
   puts("**** INTERRUPTS ON ****\n");
