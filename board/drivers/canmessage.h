@@ -1,11 +1,11 @@
 #include "llcan.h"
 
-struct CAN_message {
+typedef struct CAN_message {
   uint32_t id; // can identifier
   bool ext; // identifier is extended
   uin32_t len; // length of data
   uint8_t data[8];
-};
+} CAN_message;
 
 bool CAN_send(CAN_TypeDef *CAN_obj, CAN_message *msg) {
   if ((CAN_obj->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
