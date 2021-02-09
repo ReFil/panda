@@ -88,7 +88,7 @@ CAN_message CAN_receive(CAN_TypeDef *CAN_obj){
     msg.data[5] = CAN_obj->sFIFOMailBox[0].RDHR >> 8;
     msg.data[6] = CAN_obj->sFIFOMailBox[0].RDHR >> 16;
     msg.data[7] = CAN_obj->sFIFOMailBox[0].RDHR >> 24;
-
+    CAN_obj->RF0R |= CAN_RF0R_RFOM0;
   }
   return msg;
 }
