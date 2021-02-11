@@ -145,7 +145,7 @@ double CAN_decode(CAN_message *msg, uint8_t startBit, uint8_t bitLength, bool bi
     //shift bits back
     dataOut = dataOut >> (64 - bitLength);
   }
-  double returnData
+  double returnData;
   if(sign) {
     uint64_t maxVal = 1;
     for(int i=0; i<bitLength; i++) {
