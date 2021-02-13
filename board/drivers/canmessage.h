@@ -59,7 +59,7 @@ bool CAN_send(CAN_TypeDef *CAN_obj, CAN_message *msg) {
   return true;
 }
 
-CAN_message CAN_encode(CAN_message *msg, double inputDataDouble, uint8_t startBit, uint8_t bitLength, bool bitOrder, bool sign, double scale, double bias) { //bitOrder is 1 for MSB, 0 for LSB. Signed is 1 for signed, 0 for unsigned
+void CAN_encode(CAN_message *msg, double inputDataDouble, uint8_t startBit, uint8_t bitLength, bool bitOrder, bool sign, double scale, double bias) { //bitOrder is 1 for MSB, 0 for LSB. Signed is 1 for signed, 0 for unsigned
 
   uint64_t inputData = 0x0000000000000000LU;
   inputDataDouble = (1/scale) * (inputDataDouble - bias);
@@ -102,7 +102,6 @@ CAN_message CAN_encode(CAN_message *msg, double inputDataDouble, uint8_t startBi
   for(int i=0; i<8; i++) {
     msg->data[i] |= bytePointer[i];
   }
-  return *msg;
 }
 
 CAN_message CAN_receive(CAN_TypeDef *CAN_obj){
@@ -130,13 +129,11 @@ CAN_message CAN_receive(CAN_TypeDef *CAN_obj){
 }
 
 double CAN_decode(CAN_message *msg, uint8_t startBit, uint8_t bitLength, bool bitOrder, bool sign, double scale, double bias) { //bitorder is 1 for MSB, 0 for LSB. Signed is 1 for signed, 0 for unsigned
-  uint64_t dataOut = 0x0000000000000000LU;
-
-  //read nessage into int;
-  dataOut = msg->data[0] | uint16_t((msg->data[1] << 8)) | uint32_t(msg->data[2] << 16) | uint32_t(msg->data[3] << 24) | uint64_t(msg->data[4] << 32) | uint64_t(msg->data[5] << 40) | uint64_t(msg->data[6] << 48) | uint64_t(msg->data[7] << 56);
+  //Cast byte array as int for easy manipulation
+  uint64_t dataOut = *(uint64_t *)msg->data;
 
   //Shift left then right to isolate the data
-  dataOut = dataOut << (63 - startBit);
+  dataOut = dataOut << (64 - (startBit+bitLength));
   dataOut = dataOut >> (64 - bitLength);
 
   if(bitOrder) {
