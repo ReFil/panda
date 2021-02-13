@@ -204,7 +204,7 @@ CAN_message CAN_receive(CAN_TypeDef *CAN_obj){
   return *msg;
 }
 
-double CAN_decode(CAN_message *msg, uint8_t startBit, uint8_t bitLength, bool bitOrder, bool sign, double scale, double bias) { //bitorder is 1 for MSB, 0 for LSB. Signed is 1 for signed, 0 for unsigned
+double CAN_decode(CAN_message *msg, uint8_t startBit, uint8_t bitLength, bool bitOrder, bool sign, double Scale, double bias) { //bitorder is 1 for MSB, 0 for LSB. Signed is 1 for signed, 0 for unsigned
   //Cast byte array as int for easy manipulation
   uint64_t dataOut = *(uint64_t *)msg->Data;
   uint8_t *bytePointer = (uint8_t *)&dataOut;
@@ -235,14 +235,14 @@ double CAN_decode(CAN_message *msg, uint8_t startBit, uint8_t bitLength, bool bi
     }
     if(dataOut > (maxVal/2)) {
       returnData = dataOut - maxVal;
-      returnData = bias + (scale * returnData);
+      returnData = bias + (Scale * returnData);
     }
     else {
-      returnData = bias + (scale * dataOut);
+      returnData = bias + (Scale * dataOut);
     }
   }
   else {
-    returnData = bias + (scale * dataOut);
+    returnData = bias + (Scale * dataOut);
   }
 
   return(returnData);
