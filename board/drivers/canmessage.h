@@ -27,6 +27,11 @@ uint8_t bitSize(uint64_t v) {
   return lookup[(uint64_t)(v * multiplicator) >> 58];
 }
 
+uint8_t reverse8(uint8_t inputData) {
+  inputData = ((inputData * 0x0802LU & 0x22110LU) | (inputData * 0x8020LU & 0x88440LU)) * 0x10101LU >> 16; 
+  return inputData;
+}
+
 uint64_t reverse64(uint64_t inputData) {
   //reverse bytes
   //Efficient knuth 64 bit reverse
@@ -63,14 +68,13 @@ void CAN_encode(CAN_message *msg, double inputDataDouble, uint8_t startBit, uint
 
   uint64_t inputData = 0x0000000000000000LU;
   inputDataDouble = (1/scale) * (inputDataDouble - bias);
+  uint64_t maxVal = 1;
+  for(int i=0; i<bitLength; i++) {
+    maxVal *= 2;
+  }
   //Sign value if appropriate
   if(sign) {
-
     if(inputDataDouble < 0) {
-      uint64_t maxVal = 1;
-      for(int i=0; i<bitLength; i++) {
-        maxVal *= 2;
-      }
       inputDataDouble += maxVal;
     }
     inputData = inputDataDouble;
@@ -78,6 +82,12 @@ void CAN_encode(CAN_message *msg, double inputDataDouble, uint8_t startBit, uint
   else
     inputData = inputDataDouble;
 
+  if(inputData > (maxVal-1){
+    inputData = (maxVal-1);
+  }
+  else if(inputData < 0){
+    inputData = 0;
+  }
   //access input as byte array and evaluate length of array
   //take advantage of endianness
   uint8_t *bytePointer = (uint8_t *)&inputData;
@@ -94,13 +104,15 @@ void CAN_encode(CAN_message *msg, double inputDataDouble, uint8_t startBit, uint
 
     //Reverse int
     inputData = reverse64(inputData);
+    
   }
+  else{
+    //Shift data to appropriate place
+    inputData = inputData << startBit;
 
-  //Shift data to appropriate place
-  inputData = inputData << startBit;
-
-  for(int i=0; i<8; i++) {
-    msg->data[i] |= bytePointer[i];
+    for(int i=0; i<8; i++) {
+      msg->data[i] |= bytePointer[i];
+    }
   }
 }
 
@@ -109,13 +121,14 @@ void CAN_encode(CAN_message *msg, int inputDataInt, uint8_t startBit, uint8_t bi
   uint64_t inputData = 0x0000000000000000LU;
   inputDataInt = (1/scale) * (inputDataInt - bias);
   //Sign value if appropriate
+  uint64_t maxVal = 1;
+  for(int i=0; i<bitLength; i++) {
+    maxVal *= 2;
+  }
+  
   if(sign) {
 
     if(inputDataInt < 0) {
-      uint64_t maxVal = 1;
-      for(int i=0; i<bitLength; i++) {
-        maxVal *= 2;
-      }
       inputDataInt += maxVal;
     }
     inputData = inputDataInt;
@@ -123,6 +136,12 @@ void CAN_encode(CAN_message *msg, int inputDataInt, uint8_t startBit, uint8_t bi
   else
     inputData = inputDataInt;
 
+  if(inputData > (maxVal-1){
+    inputData = (maxVal-1);
+  }
+  else if(inputData < 0){
+    inputData = 0;
+  }
   //access input as byte array and evaluate length of array
   //take advantage of endianness
   uint8_t *bytePointer = (uint8_t *)&inputData;
@@ -139,6 +158,12 @@ void CAN_encode(CAN_message *msg, int inputDataInt, uint8_t startBit, uint8_t bi
 
     //Reverse int
     inputData = reverse64(inputData);
+    uint8_t calcStartbit = (7 - startbit%8) + 8*(startbit/8);
+    inputData = inputData << calcStartBit;
+    
+    for(int i=0; i<8; i++) {
+      msg->data[i] |= reverse8(bytePointer[i]);
+    }
   }
 
   //Shift data to appropriate place
