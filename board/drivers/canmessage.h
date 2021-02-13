@@ -3,8 +3,8 @@
 typedef struct CAN_message {
   uint32_t id; // can identifier
   bool ext; // identifier is extended
-  uint32_t len; // length of data
-  uint8_t data[8];
+  uint32_t len; // length of Data
+  uint8_t Data[8];
 } CAN_message;
 
 uint8_t bitSize(uint64_t v) {
@@ -49,8 +49,8 @@ uint64_t reverse64(uint64_t inputData) {
 
 bool CAN_send(CAN_TypeDef *CAN_obj, CAN_message *msg) {
   if ((CAN_obj->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
-    CAN_obj->sTxMailBox[0].TDLR = msg->data[0] | (msg->data[1] << 8) | (msg->data[2] << 16) | (msg->data[3] << 24);
-    CAN_obj->sTxMailBox[0].TDHR = msg->data[4] | (msg->data[5] << 8) | (msg->data[6] << 16) | (msg->data[7] << 24);
+    CAN_obj->sTxMailBox[0].TDLR = msg->Data[0] | (msg->Data[1] << 8) | (msg->Data[2] << 16) | (msg->Data[3] << 24);
+    CAN_obj->sTxMailBox[0].TDHR = msg->Data[4] | (msg->Data[5] << 8) | (msg->Data[6] << 16) | (msg->Data[7] << 24);
     CAN_obj->sTxMailBox[0].TDTR = msg->len;
     if(!msg->ext) {
       CAN_obj->sTxMailBox[0].TIR = (msg->id << 21) | 1U;
@@ -64,10 +64,10 @@ bool CAN_send(CAN_TypeDef *CAN_obj, CAN_message *msg) {
   return true;
 }
 
-void CAN_encode(CAN_message *msg, double inputDataDouble, uint8_t startBit, uint8_t bitLength, bool bitOrder, bool sign, double scale, double bias) { //bitOrder is 1 for MSB, 0 for LSB. Signed is 1 for signed, 0 for unsigned
+void CAN_encode(CAN_message *msg, double inputDataDouble, uint8_t startBit, uint8_t bitLength, bool bitOrder, bool sign, double Scale, double bias) { //bitOrder is 1 for MSB, 0 for LSB. Signed is 1 for signed, 0 for unsigned
 
   uint64_t inputData = 0x0000000000000000LU;
-  inputDataDouble = (1/scale) * (inputDataDouble - bias);
+  inputDataDouble = (1/Scale) * (inputDataDouble - bias);
   uint64_t maxVal = 1;
   for(int i=0; i<bitLength; i++) {
     maxVal *= 2;
@@ -82,7 +82,7 @@ void CAN_encode(CAN_message *msg, double inputDataDouble, uint8_t startBit, uint
   else
     inputData = inputDataDouble;
 
-  if(inputData > (maxVal-1){
+  if(inputData > (maxVal-1) {
     inputData = (maxVal-1);
   }
   else if(inputData < 0){
@@ -99,27 +99,33 @@ void CAN_encode(CAN_message *msg, double inputDataDouble, uint8_t startBit, uint
     if(trueLen > bitLength) {
       inputData = inputData >> (trueLen - bitLength);
     }
-    //Shift data to 64th position
+    //Shift Data to 64th position
     inputData = inputData << (64 - bitLength);
 
     //Reverse int
     inputData = reverse64(inputData);
+    //calculate altered start position and move
+    uint8_t calcStartbit = (7 - startBit%8) + 8*(startBit/8);
+    inputData = inputData << calcStartbit;
     
-  }
-  else{
-    //Shift data to appropriate place
-    inputData = inputData << startBit;
-
+    //reverse each byte and move to appropriate place
     for(int i=0; i<8; i++) {
-      msg->data[i] |= bytePointer[i];
+      msg->Data[i] |= reverse8(bytePointer[i]);
+    }
+  }else {
+    //Shift Data to appropriate place
+    inputData = inputData << startBit;
+  
+    for(int i=0; i<8; i++) {
+      msg->Data[i] |= bytePointer[i];
     }
   }
 }
 
-void CAN_encode(CAN_message *msg, int inputDataInt, uint8_t startBit, uint8_t bitLength, bool bitOrder, bool sign, double scale, double bias) { //bitOrder is 1 for MSB, 0 for LSB. Signed is 1 for signed, 0 for unsigned
+void CAN_encode(CAN_message *msg, int inputDataInt, uint8_t startBit, uint8_t bitLength, bool bitOrder, bool sign, double Scale, double bias) { //bitOrder is 1 for MSB, 0 for LSB. Signed is 1 for signed, 0 for unsigned
 
   uint64_t inputData = 0x0000000000000000LU;
-  inputDataInt = (1/scale) * (inputDataInt - bias);
+  inputDataInt = (1/Scale) * (inputDataInt - bias);
   //Sign value if appropriate
   uint64_t maxVal = 1;
   for(int i=0; i<bitLength; i++) {
@@ -136,7 +142,7 @@ void CAN_encode(CAN_message *msg, int inputDataInt, uint8_t startBit, uint8_t bi
   else
     inputData = inputDataInt;
 
-  if(inputData > (maxVal-1){
+  if(inputData > (maxVal-1)) {
     inputData = (maxVal-1);
   }
   else if(inputData < 0){
@@ -153,24 +159,24 @@ void CAN_encode(CAN_message *msg, int inputDataInt, uint8_t startBit, uint8_t bi
     if(trueLen > bitLength) {
       inputData = inputData >> (trueLen - bitLength);
     }
-    //Shift data to 64th position
+    //Shift Data to 64th position
     inputData = inputData << (64 - bitLength);
 
     //Reverse int
     inputData = reverse64(inputData);
-    uint8_t calcStartbit = (7 - startbit%8) + 8*(startbit/8);
-    inputData = inputData << calcStartBit;
+    uint8_t calcStartbit = (7 - startBit%8) + 8*(startBit/8);
+    inputData = inputData << calcStartbit;
     
     for(int i=0; i<8; i++) {
-      msg->data[i] |= reverse8(bytePointer[i]);
+      msg->Data[i] |= reverse8(bytePointer[i]);
     }
-  }
-
-  //Shift data to appropriate place
-  inputData = inputData << startBit;
-
-  for(int i=0; i<8; i++) {
-    msg->data[i] |= bytePointer[i];
+  }else {
+    //Shift Data to appropriate place
+    inputData = inputData << startBit;
+  
+    for(int i=0; i<8; i++) {
+      msg->Data[i] |= bytePointer[i];
+    }
   }
 }
 
@@ -185,14 +191,14 @@ CAN_message CAN_receive(CAN_TypeDef *CAN_obj){
       msg.id = CAN_obj->sFIFOMailBox[0].RIR >> 21;
     }
     msg.len = CAN_obj->sFIFOMailBox[0].RDTR;
-    msg.data[0] = CAN_obj->sFIFOMailBox[0].RDLR;
-    msg.data[1] = CAN_obj->sFIFOMailBox[0].RDLR >> 8;
-    msg.data[2] = CAN_obj->sFIFOMailBox[0].RDLR >> 16;
-    msg.data[3] = CAN_obj->sFIFOMailBox[0].RDLR >> 24;
-    msg.data[4] = CAN_obj->sFIFOMailBox[0].RDHR;
-    msg.data[5] = CAN_obj->sFIFOMailBox[0].RDHR >> 8;
-    msg.data[6] = CAN_obj->sFIFOMailBox[0].RDHR >> 16;
-    msg.data[7] = CAN_obj->sFIFOMailBox[0].RDHR >> 24;
+    msg.Data[0] = CAN_obj->sFIFOMailBox[0].RDLR;
+    msg.Data[1] = CAN_obj->sFIFOMailBox[0].RDLR >> 8;
+    msg.Data[2] = CAN_obj->sFIFOMailBox[0].RDLR >> 16;
+    msg.Data[3] = CAN_obj->sFIFOMailBox[0].RDLR >> 24;
+    msg.Data[4] = CAN_obj->sFIFOMailBox[0].RDHR;
+    msg.Data[5] = CAN_obj->sFIFOMailBox[0].RDHR >> 8;
+    msg.Data[6] = CAN_obj->sFIFOMailBox[0].RDHR >> 16;
+    msg.Data[7] = CAN_obj->sFIFOMailBox[0].RDHR >> 24;
     CAN_obj->RF0R |= CAN_RF0R_RFOM0;
   }
   return *msg;
@@ -200,16 +206,25 @@ CAN_message CAN_receive(CAN_TypeDef *CAN_obj){
 
 double CAN_decode(CAN_message *msg, uint8_t startBit, uint8_t bitLength, bool bitOrder, bool sign, double scale, double bias) { //bitorder is 1 for MSB, 0 for LSB. Signed is 1 for signed, 0 for unsigned
   //Cast byte array as int for easy manipulation
-  uint64_t dataOut = *(uint64_t *)msg->data;
+  uint64_t dataOut = *(uint64_t *)msg->Data;
+  uint8_t *bytePointer = (uint8_t *)&dataOut;
+  //Shift left then right to isolate the Data
 
-  //Shift left then right to isolate the data
-  dataOut = dataOut << (64 - (startBit+bitLength));
-  dataOut = dataOut >> (64 - bitLength);
 
   if(bitOrder) {
+    //reverse all bytes
+    for(int i=0; i<8; i++) {
+      bytePointer[i] |= reverse8(msg->Data[i]);
+    }
+    //shift to correct start point
+    uint8_t calcStartbit = (7 - startBit%8) + 8*(startBit/8);
+    dataOut = dataOut >> calcStartbit;
     //reverse to typical lsbfirst
     dataOut = reverse64(dataOut);
     //shift bits back
+    dataOut = dataOut >> (64 - bitLength);
+  } else {
+    dataOut = dataOut << (64 - (startBit+bitLength));
     dataOut = dataOut >> (64 - bitLength);
   }
   double returnData;
