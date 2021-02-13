@@ -82,7 +82,7 @@ void CAN_encode(CAN_message *msg, double inputDataDouble, uint8_t startBit, uint
   else
     inputData = inputDataDouble;
 
-  if(inputData > (maxVal-1) {
+  if(inputData > (maxVal-1)) {
     inputData = (maxVal-1);
   }
   else if(inputData < 0){
