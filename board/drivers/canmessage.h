@@ -104,6 +104,51 @@ void CAN_encode(CAN_message *msg, double inputDataDouble, uint8_t startBit, uint
   }
 }
 
+void CAN_encode(CAN_message *msg, int inputDataInt, uint8_t startBit, uint8_t bitLength, bool bitOrder, bool sign, double scale, double bias) { //bitOrder is 1 for MSB, 0 for LSB. Signed is 1 for signed, 0 for unsigned
+
+  uint64_t inputData = 0x0000000000000000LU;
+  inputDataInt = (1/scale) * (inputDataInt - bias);
+  //Sign value if appropriate
+  if(sign) {
+
+    if(inputDataInt < 0) {
+      uint64_t maxVal = 1;
+      for(int i=0; i<bitLength; i++) {
+        maxVal *= 2;
+      }
+      inputDataInt += maxVal;
+    }
+    inputData = inputDataInt;
+  }
+  else
+    inputData = inputDataInt;
+
+  //access input as byte array and evaluate length of array
+  //take advantage of endianness
+  uint8_t *bytePointer = (uint8_t *)&inputData;
+
+  if(bitOrder) {
+    //locate MSB
+    uint8_t trueLen = bitSize(inputData);
+    //if more bits are present than can be accomodated cut them off
+    if(trueLen > bitLength) {
+      inputData = inputData >> (trueLen - bitLength);
+    }
+    //Shift data to 64th position
+    inputData = inputData << (64 - bitLength);
+
+    //Reverse int
+    inputData = reverse64(inputData);
+  }
+
+  //Shift data to appropriate place
+  inputData = inputData << startBit;
+
+  for(int i=0; i<8; i++) {
+    msg->data[i] |= bytePointer[i];
+  }
+}
+
 CAN_message CAN_receive(CAN_TypeDef *CAN_obj){
   CAN_message msg;
   while ((CAN_obj->RF0R & CAN_RF0R_FMP0) != 0) {
@@ -148,7 +193,7 @@ double CAN_decode(CAN_message *msg, uint8_t startBit, uint8_t bitLength, bool bi
     for(int i=0; i<bitLength; i++) {
       maxVal *= 2;
     }
-    if(dataOut > maxVal) {
+    if(dataOut > (maxVal/2)) {
       returnData = dataOut - maxVal;
       returnData = bias + (scale * returnData);
     }
