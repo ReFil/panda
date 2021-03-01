@@ -24,9 +24,10 @@
 #define CAN CAN1
 
 //#define ADC
-#define ENCODER
+//#define ENCODER
+#define BUTTONS
 
-//#define CTRLS_USB
+#define CTRLS_USB
 
 #ifdef CTRLS_USB
   #include "drivers/uart.h"
@@ -197,10 +198,10 @@ void CAN1_SCE_IRQ_Handler(void) {
 }
 
 
-volatile bool btns[4]; // order set, cancel, speed up, speed down
-volatile bool oldbtns[4];
+volatile uint8_t btns[4]; // order set, cancel, speed up, speed down
+volatile uint8_t oldbtns[4];
 
-int led_value = 0;
+bool led_value = 0;
 
 void update_eon(void) {
   #ifdef DEBUG
@@ -214,11 +215,11 @@ void update_eon(void) {
 
   // check timer for sending the user pedal and clearing the CAN
   if ((CAN->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
-    uint8_t dat[2];
-    dat[0] = (btns[0] >> 0 | btns[1] >> 1 | btns[2] >> 2 | btns[3] >> 3) & 0xFFU;
+    uint8_t dat[3];
+    dat[0] = (btns[0] >> 0 | btns[1] << 1 | btns[2] << 2 | btns[3] << 3) & 0xFFU;
     dat[1] = ((state & 0xFU) << 4) & 0xFFU;
     dat[2] = crc_checksum(dat, CAN_GAS_SIZE - 1, crc_poly);
-    CAN->sTxMailBox[0].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16));
+    CAN->sTxMailBox[0].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16);
     CAN->sTxMailBox[0].TDTR = 4;  // len of packet is 3
     CAN->sTxMailBox[0].TIR = (CAN_GAS_OUTPUT << 21) | 1U;
   } else {
@@ -246,7 +247,7 @@ void update_eon(void) {
 volatile uint8_t encoderCount = 2;
 
 void TIM3_IRQ_Handler(void) {
-  volatile static uint8_t ABs = 0;
+  static uint8_t ABs = 0;
   ABs = (ABs << 2) & 0x0f; //left 2 bits now contain the previous AB key read-out;
   ABs |= (get_gpio_input(GPIOA, 8) << 1) | get_gpio_input(GPIOA, 9);
   encoderCount = 2;
@@ -274,30 +275,34 @@ void loop(void) {
   puts("\n");
   if(value < 1)
   {}
-  else if(value < 2& value > 1)
+  else if((value < 2) && (value > 1))
   {}
-  else if(value < 3& value > 2)
+  else if((value < 3) && (value > 2))
   {}
-#else
+#endif
 #ifdef ENCODER
   switch (encoderCount) {
     case 1:
       btns[2] = 1;
       btns[3] = 0;
+      break;
     case 2:
       btns[2] = 0;
       btns[3] = 0;
+      break;
     case 3:
       btns[2] = 0;
-      btns[3] = 0;
+      btns[3] = 1;
+      break;
   }
-  btns[0] = get_gpio_input(GPIOA, 8);
-  btns[1] = get_gpio_input(GPIOA, 9);
-#else
-  btns[0] = get_gpio_input(GPIOA, 8);
-  btns[1] = get_gpio_input(GPIOA, 9);
-  btns[2] = get_gpio_input(GPIOA, 10);
-  btns[3] = get_gpio_input(GPIOC, 10);
+  btns[0] = !get_gpio_input(GPIOA, 8);
+  btns[1] = !get_gpio_input(GPIOA, 9);
+#endif
+#ifdef BUTTONS
+  btns[0] = !get_gpio_input(GPIOA, 8);
+  btns[1] = !get_gpio_input(GPIOA, 9);
+  btns[2] = !get_gpio_input(GPIOA, 10);
+  btns[3] = !get_gpio_input(GPIOC, 10);
 #endif
 
   if(btns[0] && enabled && !oldbtns[0]){ //if set button pressed but system is already enabled
@@ -308,9 +313,10 @@ void loop(void) {
     update_eon(); //send new button values to eon
   }
 
-  oldbtns = btns;
-
-  // write the pedal to the DAC
+  oldbtns[0] = btns[0];
+  oldbtns[1] = btns[1];
+  oldbtns[2] = btns[2];
+  oldbtns[3] = btns[3];
 
   watchdog_feed();
 }
@@ -362,9 +368,14 @@ int main(void) {
   timer_init(TIM3, 15);
   NVIC_EnableIRQ(TIM3_IRQn);
 #endif
-  btns = {0, 0, 0, 0};
+  btns[0] = 0;
+  btns[1] = 0;
+  btns[2] = 0;
+  btns[3] = 0;
+
   update_eon();
   watchdog_init();
+  current_board->set_led(LED_GREEN, 1);
 
   puts("**** INTERRUPTS ON ****\n");
   enable_interrupts();

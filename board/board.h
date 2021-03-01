@@ -54,6 +54,7 @@ void detect_board_type(void) {
       puts("Hardware type is UNKNOWN!\n");
     #endif
   #endif
+  #endif
 }
 
 
