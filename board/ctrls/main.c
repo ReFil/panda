@@ -352,8 +352,13 @@ int main(void) {
 
 #ifdef ADC
   adc_init();
+  set_gpio_mode(GPIOC, 0, MODE_ANALOG);
+#else
+  set_gpio_mode(GPIOC, 0, MODE_INPUT);
 #endif
-
+  set_gpio_mode(GPIOA, 8, MODE_INPUT);
+  set_gpio_mode(GPIOA, 9, MODE_INPUT);
+  set_gpio_mode(GPIOA, 10, MODE_INPUT);
   // init can
   bool llcan_speed_set = llcan_set_speed(CAN1, 5000, false, false);
   if (!llcan_speed_set) {
