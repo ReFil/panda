@@ -295,14 +295,14 @@ void loop(void) {
       btns[3] = 1;
       break;
   }
-  btns[0] = !get_gpio_input(GPIOA, 8);
-  btns[1] = !get_gpio_input(GPIOA, 9);
+  btns[0] = !get_gpio_input(GPIOA, 10);
+  btns[1] = !get_gpio_input(GPIOC, 0);
 #endif
 #ifdef BUTTONS
   btns[0] = !get_gpio_input(GPIOA, 8);
-  btns[1] = !get_gpio_input(GPIOA, 9);
+  btns[1] = !get_gpio_input(GPIOC, 0);
   btns[2] = !get_gpio_input(GPIOA, 10);
-  btns[3] = !get_gpio_input(GPIOC, 10);
+  btns[3] = !get_gpio_input(GPIOA, 9);
 #endif
 
   if(btns[0] && enabled && !oldbtns[0]){ //if set button pressed but system is already enabled
@@ -353,12 +353,18 @@ int main(void) {
 #ifdef ADC
   adc_init();
   set_gpio_mode(GPIOC, 0, MODE_ANALOG);
-#else
+#endif
+#ifdef BUTTONS
   set_gpio_mode(GPIOC, 0, MODE_INPUT);
+  set_gpio_pullup(GPIOC, 0, PULL_UP);
 #endif
   set_gpio_mode(GPIOA, 8, MODE_INPUT);
   set_gpio_mode(GPIOA, 9, MODE_INPUT);
   set_gpio_mode(GPIOA, 10, MODE_INPUT);
+  set_gpio_pullup(GPIOA, 8, PULL_UP);
+  set_gpio_pullup(GPIOA, 9, PULL_UP);
+  set_gpio_pullup(GPIOA, 10, PULL_UP);
+
   // init can
   bool llcan_speed_set = llcan_set_speed(CAN1, 5000, false, false);
   if (!llcan_speed_set) {
