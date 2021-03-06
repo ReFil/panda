@@ -21,18 +21,25 @@
 #include "gpio.h"
 #include "crc.h"
 
-#include "drivers/uart.h"
-#include "drivers/usb.h"
-
 #define CAN CAN1
 
-//#define ADC
-//#define ENCODER
-#define BUTTONS
+#define PEDAL_USB
 
-
-
-
+#ifdef PEDAL_USB
+  #include "drivers/uart.h"
+  #include "drivers/usb.h"
+#else
+  // no serial either
+  void puts(const char *a) {
+    UNUSED(a);
+  }
+  void puth(unsigned int i) {
+    UNUSED(i);
+  }
+  void puth2(unsigned int i) {
+    UNUSED(i);
+  }
+#endif
 
 #define ENTER_BOOTLOADER_MAGIC 0xdeadbeef
 uint32_t enter_bootloader_mode;
@@ -43,6 +50,8 @@ void __initialize_hardware_early(void) {
 }
 
 // ********************* serial debugging *********************
+
+#ifdef PEDAL_USB
 
 void debug_ring_callback(uart_ring *ring) {
   char rcv;
@@ -96,23 +105,24 @@ int usb_cb_control_msg(USB_Setup_TypeDef *setup, uint8_t *resp, bool hardwired) 
   return resp_len;
 }
 
-
+#endif
 
 // ***************************** can port *****************************
 
 // addresses to be used on CAN
-#define CAN_CTRLS_INPUT  0x366
-#define CAN_CTRLS_OUTPUT 0x365U
-#define CAN_CTRLS_SIZE 3
+#define CAN_GAS_INPUT  0x200
+#define CAN_GAS_OUTPUT 0x201U
+#define CAN_GAS_SIZE 6
+#define COUNTER_CYCLE 0xFU
 
 void CAN1_TX_IRQ_Handler(void) {
   // clear interrupt
   CAN->TSR |= CAN_TSR_RQCP0;
 }
 
-// set state
-bool enabled;
-uint8_t setspeed;
+// two independent values
+uint16_t gas_set_0 = 0;
+uint16_t gas_set_1 = 0;
 
 #define MAX_TIMEOUT 10U
 uint32_t timeout = 0;
@@ -127,8 +137,9 @@ uint32_t current_index = 0;
 #define FAULT_INVALID 6U
 uint8_t state = FAULT_STARTUP;
 
-const uint8_t crc_poly = 0x1D;  // standard crc8
+const uint8_t crc_poly = 0x1D;  // standard crc8 SAE J1850
 uint8_t crc8_lut_1d[256];
+
 
 void CAN1_RX0_IRQ_Handler(void) {
   while ((CAN->RF0R & CAN_RF0R_FMP0) != 0) {
@@ -136,7 +147,7 @@ void CAN1_RX0_IRQ_Handler(void) {
       puts("CAN RX\n");
     #endif
     int address = CAN->sFIFOMailBox[0].RIR >> 21;
-    if (address == CAN_CTRLS_INPUT) {
+    if (address == CAN_GAS_INPUT) {
       // softloader entry
       if (GET_BYTES_04(&CAN->sFIFOMailBox[0]) == 0xdeadface) {
         if (GET_BYTES_48(&CAN->sFIFOMailBox[0]) == 0x0ab00b1e) {
@@ -155,21 +166,34 @@ void CAN1_RX0_IRQ_Handler(void) {
       for (int i=0; i<8; i++) {
         dat[i] = GET_BYTE(&CAN->sFIFOMailBox[0], i);
       }
-      if (lut_checksum(dat, CAN_CTRLS_SIZE - 1) == dat[0]) {
-        enabled = ((dat[1] >> 7) & 1U) != 0U;
-        setspeed = dat[2];
-        #ifdef DEBUG
-          puts("enable detected");
-          puth(setspeed);
-          puts("\n");
-        #endif
-        if (enabled) {
+      uint16_t value_0 = (dat[2] << 8) | dat[1];
+      uint16_t value_1 = (dat[4] << 8) | dat[3];
+      bool enable = ((dat[5] >> 7) & 1U) != 0U;
+      uint8_t index = dat[6] & COUNTER_CYCLE;
+      if (lut_checksum(dat, CAN_GAS_SIZE - 1) == dat[0]) {
+        if (((current_index + 1U) & COUNTER_CYCLE) == index) {
+          #ifdef DEBUG
+            puts("setting gas ");
+            puth(value_0);
+            puts("\n");
+          #endif
+          if (enable) {
+            gas_set_0 = value_0;
+            gas_set_1 = value_1;
+          } else {
+            // clear the fault state if values are 0
+            if ((value_0 == 0U) && (value_1 == 0U)) {
+              state = NO_FAULT;
+            } else {
+              state = FAULT_INVALID;
+            }
+            gas_set_0 = 0;
+            gas_set_1 = 0;
+          }
+          // clear the timeout
+          timeout = 0;
         }
-        else {
-            state = NO_FAULT;
-        }
-        // clear the timeout
-        timeout = 0;
+        current_index = index;
       } else {
         // wrong checksum = fault
         state = FAULT_BAD_CHECKSUM;
@@ -185,31 +209,37 @@ void CAN1_SCE_IRQ_Handler(void) {
   llcan_clear_send(CAN);
 }
 
+uint32_t pdl0 = 0;
+uint32_t pdl1 = 0;
+unsigned int pkt_idx = 0;
 
-volatile uint8_t btns[4]; // order set, cancel, speed up, speed down
-volatile uint8_t oldbtns[4];
+int led_value = 0;
 
-bool led_value = 0;
-
-void update_eon(void) {
+void TIM3_IRQ_Handler(void) {
   #ifdef DEBUG
     puth(TIM3->CNT);
     puts(" ");
-    puth(state);
+    puth(pdl0);
     puts(" ");
-    puth(set_btn);
+    puth(pdl1);
     puts("\n");
   #endif
 
   // check timer for sending the user pedal and clearing the CAN
   if ((CAN->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
-    uint8_t dat[3];
-    dat[0] = lut_checksum(dat, CAN_CTRLS_SIZE);
-    dat[1] = (btns[0] >> 0 | btns[1] << 1 | btns[2] << 2 | btns[3] << 3) & 0xFFU;
-    dat[2] = ((state & 0xFU) << 4) & 0xFFU;
-    CAN->sTxMailBox[0].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16);
-    CAN->sTxMailBox[0].TDTR = 4;  // len of packet is 3
-    CAN->sTxMailBox[0].TIR = (CAN_CTRLS_OUTPUT << 21) | 1U;
+    uint8_t dat[8];
+    dat[1] = (pdl0 >> 0) & 0xFFU;
+    dat[2] = (pdl0 >> 8) & 0xFFU;
+    dat[3] = (pdl1 >> 0) & 0xFFU;
+    dat[4] = (pdl1 >> 8) & 0xFFU;
+    dat[5] = ((state & 0xFU) << 4) | pkt_idx;
+    dat[0] = lut_checksum(dat, CAN_GAS_SIZE - 1);
+    CAN->sTxMailBox[0].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
+    CAN->sTxMailBox[0].TDHR = dat[4] | (dat[5] << 8);
+    CAN->sTxMailBox[0].TDTR = 6;  // len of packet is 5
+    CAN->sTxMailBox[0].TIR = (CAN_GAS_OUTPUT << 21) | 1U;
+    ++pkt_idx;
+    pkt_idx &= COUNTER_CYCLE;
   } else {
     // old can packet hasn't sent!
     state = FAULT_SEND;
@@ -232,79 +262,21 @@ void update_eon(void) {
   }
 }
 
-volatile uint8_t encoderCount = 2;
-
-void TIM3_IRQ_Handler(void) {
-  static uint8_t ABs = 0;
-  ABs = (ABs << 2) & 0x0f; //left 2 bits now contain the previous AB key read-out;
-  ABs |= (get_gpio_input(GPIOA, 8) << 1) | get_gpio_input(GPIOA, 9);
-  encoderCount = 2;
-  switch (ABs)
-  {
-    case 0x0d:
-      encoderCount = 3;
-      break;
-    case 0x0e:
-      encoderCount = 1;
-      break;
-  }
-}
-
-
 // ***************************** main code *****************************
 
-void loop(void) {
+void pedal(void) {
   // read/write
+  pdl0 = adc_get(ADCCHAN_ACCEL0);
+  pdl1 = adc_get(ADCCHAN_ACCEL1);
 
-#ifdef ADC
-  uint32_t value;
-  value = adc_get(ADCCHAN_ACCEL0);
-  puth(value);
-  puts("\n");
-  if(value < 1)
-  {}
-  else if((value < 2) && (value > 1))
-  {}
-  else if((value < 3) && (value > 2))
-  {}
-#endif
-#ifdef ENCODER
-  switch (encoderCount) {
-    case 1:
-      btns[2] = 1;
-      btns[3] = 0;
-      break;
-    case 2:
-      btns[2] = 0;
-      btns[3] = 0;
-      break;
-    case 3:
-      btns[2] = 0;
-      btns[3] = 1;
-      break;
+  // write the pedal to the DAC
+  if (state == NO_FAULT) {
+    dac_set(0, MAX(gas_set_0, pdl0));
+    dac_set(1, MAX(gas_set_1, pdl1));
+  } else {
+    dac_set(0, pdl0);
+    dac_set(1, pdl1);
   }
-  btns[0] = !get_gpio_input(GPIOA, 10);
-  btns[1] = !get_gpio_input(GPIOC, 0);
-#endif
-#ifdef BUTTONS
-  btns[0] = !get_gpio_input(GPIOA, 8);
-  btns[1] = !get_gpio_input(GPIOC, 0);
-  btns[2] = !get_gpio_input(GPIOA, 10);
-  btns[3] = !get_gpio_input(GPIOA, 9);
-#endif
-
-  if(btns[0] && enabled && !oldbtns[0]){ //if set button pressed but system is already enabled
-    btns[0] = 0;
-    btns[1] = 1; //cancel instead
-  }
-  if(btns[0] != oldbtns[0] || btns[1] != oldbtns[1] || btns[2] != oldbtns[2] || btns[3] != oldbtns[3]) {//if button values have changed
-    update_eon(); //send new button values to eon
-  }
-
-  oldbtns[0] = btns[0];
-  oldbtns[1] = btns[1];
-  oldbtns[2] = btns[2];
-  oldbtns[3] = btns[3];
 
   watchdog_feed();
 }
@@ -318,9 +290,7 @@ int main(void) {
   REGISTER_INTERRUPT(CAN1_SCE_IRQn, CAN1_SCE_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
 
   // Should run at around 732Hz (see init below)
-  #ifdef ENCODER
   REGISTER_INTERRUPT(TIM3_IRQn, TIM3_IRQ_Handler, 1000U, FAULT_INTERRUPT_RATE_TIM3)
-  #endif
 
   disable_interrupts();
 
@@ -333,25 +303,14 @@ int main(void) {
   // init board
   current_board->init();
 
-#ifdef CTRLS_USB
+#ifdef PEDAL_USB
   // enable USB
   usb_init();
 #endif
 
-#ifdef ADC
+  // pedal stuff
+  dac_init();
   adc_init();
-  set_gpio_mode(GPIOC, 0, MODE_ANALOG);
-#endif
-#ifdef BUTTONS
-  set_gpio_mode(GPIOC, 0, MODE_INPUT);
-  set_gpio_pullup(GPIOC, 0, PULL_UP);
-#endif
-  set_gpio_mode(GPIOA, 8, MODE_INPUT);
-  set_gpio_mode(GPIOA, 9, MODE_INPUT);
-  set_gpio_mode(GPIOA, 10, MODE_INPUT);
-  set_gpio_pullup(GPIOA, 8, PULL_UP);
-  set_gpio_pullup(GPIOA, 9, PULL_UP);
-  set_gpio_pullup(GPIOA, 10, PULL_UP);
 
   // init can
   bool llcan_speed_set = llcan_set_speed(CAN1, 5000, false, false);
@@ -363,26 +322,18 @@ int main(void) {
   UNUSED(ret);
 
   // 48mhz / 65536 ~= 732
-#ifdef ENCODER
   timer_init(TIM3, 15);
   NVIC_EnableIRQ(TIM3_IRQn);
-#endif
-  btns[0] = 0;
-  btns[1] = 0;
-  btns[2] = 0;
-  btns[3] = 0;
 
   gen_crc_lookup_table(crc_poly, crc8_lut_1d);
-  update_eon();
   watchdog_init();
-  current_board->set_led(LED_GREEN, 1);
 
   puts("**** INTERRUPTS ON ****\n");
   enable_interrupts();
 
-  // main CTRLS loop
+  // main pedal loop
   while (1) {
-    loop();
+    pedal();
   }
 
   return 0;
