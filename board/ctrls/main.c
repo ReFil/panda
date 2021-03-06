@@ -258,7 +258,7 @@ void loop(void) {
   // read/write
 
 #ifdef ADC
-  uint32_t value;
+  uint16_t value;
   value = adc_get(ADCCHAN_ACCEL0);
   puth(value);
   puts("\n");

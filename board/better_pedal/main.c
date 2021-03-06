@@ -21,25 +21,10 @@
 #include "gpio.h"
 #include "crc.h"
 
+#include "drivers/uart.h"
+#include "drivers/usb.h"
+
 #define CAN CAN1
-
-#define PEDAL_USB
-
-#ifdef PEDAL_USB
-  #include "drivers/uart.h"
-  #include "drivers/usb.h"
-#else
-  // no serial either
-  void puts(const char *a) {
-    UNUSED(a);
-  }
-  void puth(unsigned int i) {
-    UNUSED(i);
-  }
-  void puth2(unsigned int i) {
-    UNUSED(i);
-  }
-#endif
 
 #define ENTER_BOOTLOADER_MAGIC 0xdeadbeef
 uint32_t enter_bootloader_mode;
@@ -49,10 +34,7 @@ void __initialize_hardware_early(void) {
   early();
 }
 
-// ********************* serial debugging *********************
-
-#ifdef PEDAL_USB
-
+// ********************* usb debugging *********************
 void debug_ring_callback(uart_ring *ring) {
   char rcv;
   while (getc(ring, &rcv) != 0) {
@@ -105,7 +87,6 @@ int usb_cb_control_msg(USB_Setup_TypeDef *setup, uint8_t *resp, bool hardwired) 
   return resp_len;
 }
 
-#endif
 
 // ***************************** can port *****************************
 
@@ -170,7 +151,7 @@ void CAN1_RX0_IRQ_Handler(void) {
       uint16_t value_1 = (dat[4] << 8) | dat[3];
       bool enable = ((dat[5] >> 7) & 1U) != 0U;
       uint8_t index = dat[6] & COUNTER_CYCLE;
-      if (lut_checksum(dat, CAN_GAS_SIZE - 1) == dat[0]) {
+      if (lut_checksum(dat, CAN_GAS_SIZE, crc8_lut_1d) == dat[0]) {
         if (((current_index + 1U) & COUNTER_CYCLE) == index) {
           #ifdef DEBUG
             puts("setting gas ");
@@ -233,7 +214,7 @@ void TIM3_IRQ_Handler(void) {
     dat[3] = (pdl1 >> 0) & 0xFFU;
     dat[4] = (pdl1 >> 8) & 0xFFU;
     dat[5] = ((state & 0xFU) << 4) | pkt_idx;
-    dat[0] = lut_checksum(dat, CAN_GAS_SIZE - 1);
+    dat[0] = lut_checksum(dat, CAN_GAS_SIZE, crc8_lut_1d);
     CAN->sTxMailBox[0].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
     CAN->sTxMailBox[0].TDHR = dat[4] | (dat[5] << 8);
     CAN->sTxMailBox[0].TDTR = 6;  // len of packet is 5
