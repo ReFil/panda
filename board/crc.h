@@ -16,8 +16,8 @@ uint8_t crc_checksum(uint8_t *dat, int len, const uint8_t poly) {
 }
 
 void gen_crc_lookup_table(uint8_t poly, uint8_t crc_lut[]) {
-  uint8_t crc;
-  uint8_t i, j;
+  uint8_t crc, j;
+  uint16_t i;
 
    for (i = 0; i < 256; i++) {
     crc = i;
@@ -31,13 +31,13 @@ void gen_crc_lookup_table(uint8_t poly, uint8_t crc_lut[]) {
   }
 }
 
-uint8_t lut_checksum(uint8_t *d, int l) {
+uint8_t lut_checksum(uint8_t *d, int l, uint8_t *table) {
   uint8_t crc = 0xFF; // Standard init value for CRC8
-
   // CRC the payload, skipping over the first byte where the CRC lives.
   for (int i = 1; i < l; i++) {
     crc ^= d[i] & 0xFF;
-    crc = crc8_lut_d5[crc];
+    crc = table[crc] ^ crc<<8;
   }
+  crc = crc ^ 0xFF; //final xor
   return crc;
 }

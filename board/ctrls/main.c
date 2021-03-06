@@ -155,7 +155,7 @@ void CAN1_RX0_IRQ_Handler(void) {
       for (int i=0; i<8; i++) {
         dat[i] = GET_BYTE(&CAN->sFIFOMailBox[0], i);
       }
-      if (lut_checksum(dat, CAN_CTRLS_SIZE - 1) == dat[0]) {
+      if (lut_checksum(dat, 3, crc8_lut_1d) == dat[0]) {
         enabled = ((dat[1] >> 7) & 1U) != 0U;
         setspeed = dat[2];
         #ifdef DEBUG
@@ -204,11 +204,12 @@ void update_eon(void) {
   // check timer for sending the user pedal and clearing the CAN
   if ((CAN->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     uint8_t dat[3];
-    dat[0] = lut_checksum(dat, CAN_CTRLS_SIZE);
-    dat[1] = (btns[0] >> 0 | btns[1] << 1 | btns[2] << 2 | btns[3] << 3) & 0xFFU;
-    dat[2] = ((state & 0xFU) << 4) & 0xFFU;
+    dat[0] = 0;
+    dat[1] = (btns[0] | btns[1] << 1 | btns[2] << 2 | btns[3] << 3) & 0xFFU;
+    dat[2] = (state & 0xFU);
+    dat[0] = lut_checksum(dat, 3, crc8_lut_1d);
     CAN->sTxMailBox[0].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16);
-    CAN->sTxMailBox[0].TDTR = 4;  // len of packet is 3
+    CAN->sTxMailBox[0].TDTR = 3;  // len of packet is 3
     CAN->sTxMailBox[0].TIR = (CAN_CTRLS_OUTPUT << 21) | 1U;
   } else {
     // old can packet hasn't sent!
