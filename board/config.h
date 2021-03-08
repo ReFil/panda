@@ -8,7 +8,6 @@
 //#define DEBUG_FAULTS
 
 #ifdef STM32F4
-  #define PANDA
   #include "stm32f4xx.h"
 #else
   #include "stm32f2xx.h"
@@ -46,4 +45,3 @@
 #define CAN_INTERRUPT_RATE 12000U
 
 #endif
-

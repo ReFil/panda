@@ -1,4 +1,4 @@
-CFLAGS += -I inc -I ../ -nostdlib -fno-builtin -std=gnu11 -Os
+CFLAGS += -I inc -I ../ -nostdlib -fno-builtin -std=gnu11 -Os -DPANDA
 
 CFLAGS += -Tstm32_flash.ld
 
