@@ -10,12 +10,10 @@
 #include "drivers/interrupts.h"
 #include "drivers/llcan.h"
 #include "drivers/llgpio.h"
-#include "drivers/adc.h"
 
 #include "board.h"
 
 #include "drivers/clock.h"
-#include "drivers/dac.h"
 #include "drivers/timer.h"
 
 #include "gpio.h"
@@ -24,7 +22,9 @@
 #include "drivers/uart.h"
 #include "drivers/usb.h"
 
-#define CAN CAN1
+#define CAN1
+#define CAN2
+#define CAN3
 
 #define ENTER_BOOTLOADER_MAGIC 0xdeadbeef
 uint32_t enter_bootloader_mode;
@@ -91,19 +91,35 @@ int usb_cb_control_msg(USB_Setup_TypeDef *setup, uint8_t *resp, bool hardwired) 
 // ***************************** can port *****************************
 
 // addresses to be used on CAN
-#define CAN_GAS_INPUT  0x200
-#define CAN_GAS_OUTPUT 0x201U
-#define CAN_GAS_SIZE 6
+#define CAN_UPDATE  0x341
 #define COUNTER_CYCLE 0xFU
 
 void CAN1_TX_IRQ_Handler(void) {
   // clear interrupt
-  CAN->TSR |= CAN_TSR_RQCP0;
+  CAN1->TSR |= CAN_TSR_RQCP0;
+}
+
+void CAN2_TX_IRQ_Handler(void) {
+  // clear interrupt
+  CAN2->TSR |= CAN_TSR_RQCP0;
+}
+
+void CAN3_TX_IRQ_Handler(void) {
+  // clear interrupt
+  CAN3->TSR |= CAN_TSR_RQCP0;
 }
 
 // two independent values
-uint16_t gas_set_0 = 0;
-uint16_t gas_set_1 = 0;
+uint8_t current_speed = 0;
+uint16_t q_target_ext = 0;
+bool q_target_ext_qf = 0;
+
+uint8_t can1_count_out = 0;
+uint8_t can1_count_in;
+uint8_t can2_count_out_1 = 0;
+uint8_t can2_count_out_2 = 0;
+uint8_t can2_count_in_1;
+uint8_t can2_count_in_2;
 
 #define MAX_TIMEOUT 10U
 uint32_t timeout = 0;
@@ -118,94 +134,112 @@ uint32_t current_index = 0;
 #define FAULT_INVALID 6U
 uint8_t state = FAULT_STARTUP;
 
+#define NO_EXTFAULT1 0U
+#define EXTFAULT1_CHECKSUM1 1U
+#define EXTFAULT1_CHECKSUM2 2U
+#define EXTFAULT1_SCE 3U
+#define EXTFAULT1_COUNTER1 4U
+#define EXTFAULT1_COUNTER2 5U
+#define EXTFAULT1_TIMEOUT 6U
+
+#define NO_EXTFAULT2 0U
+#define EXTFAULT2_CHECKSUM1 1U
+#define EXTFAULT2_CHECKSUM2 2U
+#define EXTFAULT2_SCE 3U
+#define EXTFAULT2_COUNTER1 4U
+#define EXTFAULT2_COUNTER2 5U
+#define EXTFAULT2_TIMEOUT 6U
+
 const uint8_t crc_poly = 0x1D;  // standard crc8 SAE J1850
 uint8_t crc8_lut_1d[256];
 
 
 void CAN1_RX0_IRQ_Handler(void) {
-  while ((CAN->RF0R & CAN_RF0R_FMP0) != 0) {
-    #ifdef DEBUG
-      puts("CAN RX\n");
-    #endif
-    int address = CAN->sFIFOMailBox[0].RIR >> 21;
-    if (address == CAN_GAS_INPUT) {
-      // softloader entry
-      if (GET_BYTES_04(&CAN->sFIFOMailBox[0]) == 0xdeadface) {
-        if (GET_BYTES_48(&CAN->sFIFOMailBox[0]) == 0x0ab00b1e) {
-          enter_bootloader_mode = ENTER_SOFTLOADER_MAGIC;
-          NVIC_SystemReset();
-        } else if (GET_BYTES_48(&CAN->sFIFOMailBox[0]) == 0x02b00b1e) {
-          enter_bootloader_mode = ENTER_BOOTLOADER_MAGIC;
-          NVIC_SystemReset();
-        } else {
-          puts("Failed entering Softloader or Bootloader\n");
-        }
-      }
-
-      // normal packet
-      uint8_t dat[8];
-      for (int i=0; i<8; i++) {
-        dat[i] = GET_BYTE(&CAN->sFIFOMailBox[0], i);
-      }
-      uint16_t value_0 = (dat[2] << 8) | dat[1];
-      uint16_t value_1 = (dat[4] << 8) | dat[3];
-      bool enable = ((dat[5] >> 7) & 1U) != 0U;
-      uint8_t index = dat[6] & COUNTER_CYCLE;
-      if (lut_checksum(dat, CAN_GAS_SIZE, crc8_lut_1d) == dat[0]) {
-        if (((current_index + 1U) & COUNTER_CYCLE) == index) {
-          #ifdef DEBUG
-            puts("setting gas ");
-            puth(value_0);
-            puts("\n");
-          #endif
-          if (enable) {
-            gas_set_0 = value_0;
-            gas_set_1 = value_1;
+  while ((CAN1->RF0R & CAN_RF0R_FMP0) != 0) {
+    puts("CAN1 RX\n");
+    uint16_t address = CAN1->sFIFOMailBox[0].RIR >> 21;
+    switch (address) {
+      case CAN_UPDATE:
+        if (GET_BYTES_04(&CAN1->sFIFOMailBox[0]) == 0xdeadface) {
+          if (GET_BYTES_48(&CAN1->sFIFOMailBox[0]) == 0x0ab00b1e) {
+            enter_bootloader_mode = ENTER_SOFTLOADER_MAGIC;
+            NVIC_SystemReset();
+          } else if (GET_BYTES_48(&CAN1->sFIFOMailBox[0]) == 0x02b00b1e) {
+            enter_bootloader_mode = ENTER_BOOTLOADER_MAGIC;
+            NVIC_SystemReset();
           } else {
-            // clear the fault state if values are 0
-            if ((value_0 == 0U) && (value_1 == 0U)) {
-              state = NO_FAULT;
-            } else {
-              state = FAULT_INVALID;
-            }
-            gas_set_0 = 0;
-            gas_set_1 = 0;
+            puts("Failed entering Softloader or Bootloader\n");
           }
-          // clear the timeout
-          timeout = 0;
         }
-        current_index = index;
-      } else {
-        // wrong checksum = fault
-        state = FAULT_BAD_CHECKSUM;
-      }
+        break;
+      case 0x20E:
+        uint8_t dat[8];
+        for (int i=0; i<8; i++) {
+          dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
+        }
+        break;
+
+      default:
     }
     // next
-    CAN->RF0R |= CAN_RF0R_RFOM0;
+    CAN1->RF0R |= CAN_RF0R_RFOM0;
   }
 }
 
 void CAN1_SCE_IRQ_Handler(void) {
   state = FAULT_SCE;
-  llcan_clear_send(CAN);
+  llcan_clear_send(CAN1);
 }
 
-uint32_t pdl0 = 0;
-uint32_t pdl1 = 0;
-unsigned int pkt_idx = 0;
+void CAN2_RX0_IRQ_Handler(void) {
+  while ((CAN2->RF0R & CAN_RF0R_FMP0) != 0) {
+    puts("CAN2 RX\n");
+    uint16_t address = CAN2->sFIFOMailBox[0].RIR >> 21;
+    switch (address) {
+      case 0x38E:
+        uint8_t dat[8];
+        for (int i=0; i<8; i++) {
+          dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
+        }
+        break;
+      case 0x38F:
+        uint8_t dat[8];
+        for (int i=0; i<8; i++) {
+          dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
+        }
+        break;
+      default:
+    }
+    // next
+    CAN2->RF0R |= CAN_RF0R_RFOM0;
+  }
+}
 
-int led_value = 0;
+void CAN2_SCE_IRQ_Handler(void) {
+  state = FAULT_SCE;
+  llcan_clear_send(CAN2);
+}
+
+void CAN3_RX0_IRQ_Handler(void) {
+  while ((CAN3->RF0R & CAN_RF0R_FMP0) != 0) {
+    puts("CAN3 RX\n");
+    uint16_t address = CAN3->sFIFOMailBox[0].RIR >> 21;
+
+    // next
+    CAN3->RF0R |= CAN_RF0R_RFOM0;
+  }
+}
+
+void CAN3_SCE_IRQ_Handler(void) {
+  state = FAULT_SCE;
+  llcan_clear_send(CAN3);
+}
+
+
+
+
 
 void TIM3_IRQ_Handler(void) {
-  #ifdef DEBUG
-    puth(TIM3->CNT);
-    puts(" ");
-    puth(pdl0);
-    puts(" ");
-    puth(pdl1);
-    puts("\n");
-  #endif
-
   // check timer for sending the user pedal and clearing the CAN
   if ((CAN->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     uint8_t dat[8];
@@ -221,7 +255,8 @@ void TIM3_IRQ_Handler(void) {
     CAN->sTxMailBox[0].TIR = (CAN_GAS_OUTPUT << 21) | 1U;
     ++pkt_idx;
     pkt_idx &= COUNTER_CYCLE;
-  } else {
+  }
+  else {
     // old can packet hasn't sent!
     state = FAULT_SEND;
     #ifdef DEBUG
@@ -247,17 +282,7 @@ void TIM3_IRQ_Handler(void) {
 
 void pedal(void) {
   // read/write
-  pdl0 = adc_get(ADCCHAN_ACCEL0);
-  pdl1 = adc_get(ADCCHAN_ACCEL1);
 
-  // write the pedal to the DAC
-  if (state == NO_FAULT) {
-    dac_set(0, MAX(gas_set_0, pdl0));
-    dac_set(1, MAX(gas_set_1, pdl1));
-  } else {
-    dac_set(0, pdl0);
-    dac_set(1, pdl1);
-  }
 
   watchdog_feed();
 }
@@ -269,6 +294,12 @@ int main(void) {
   REGISTER_INTERRUPT(CAN1_TX_IRQn, CAN1_TX_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
   REGISTER_INTERRUPT(CAN1_RX0_IRQn, CAN1_RX0_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
   REGISTER_INTERRUPT(CAN1_SCE_IRQn, CAN1_SCE_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
+  REGISTER_INTERRUPT(CAN2_TX_IRQn, CAN2_TX_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_2)
+  REGISTER_INTERRUPT(CAN2_RX0_IRQn, CAN2_RX0_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_2)
+  REGISTER_INTERRUPT(CAN2_SCE_IRQn, CAN2_SCE_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_2)
+  REGISTER_INTERRUPT(CAN3_TX_IRQn, CAN3_TX_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_3)
+  REGISTER_INTERRUPT(CAN3_RX0_IRQn, CAN3_RX0_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_3)
+  REGISTER_INTERRUPT(CAN3_SCE_IRQn, CAN3_SCE_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_3)
 
   // Should run at around 732Hz (see init below)
   REGISTER_INTERRUPT(TIM3_IRQn, TIM3_IRQ_Handler, 1000U, FAULT_INTERRUPT_RATE_TIM3)
@@ -283,30 +314,35 @@ int main(void) {
 
   // init board
   current_board->init();
-
-#ifdef PEDAL_USB
   // enable USB
   usb_init();
-#endif
-
-  // pedal stuff
-  dac_init();
-  adc_init();
 
   // init can
   bool llcan_speed_set = llcan_set_speed(CAN1, 5000, false, false);
   if (!llcan_speed_set) {
-    puts("Failed to set llcan speed");
+    puts("Failed to set llcan1 speed");
+  }
+  llcan_speed_set = llcan_set_speed(CAN2, 5000, false, false);
+  if (!llcan_speed_set) {
+    puts("Failed to set llcan2 speed");
+  }
+  llcan_speed_set = llcan_set_speed(CAN3, 5000, false, false);
+  if (!llcan_speed_set) {
+    puts("Failed to set llcan3 speed");
   }
 
   bool ret = llcan_init(CAN1);
+  ret = llcan_init(CAN2);
+  ret = llcan_init(CAN3);
   UNUSED(ret);
 
+  gen_crc_lookup_table(crc_poly, crc8_lut_1d);
+
   // 48mhz / 65536 ~= 732
-  timer_init(TIM3, 15);
+  timer_init(TIM3, 8);
   NVIC_EnableIRQ(TIM3_IRQn);
 
-  gen_crc_lookup_table(crc_poly, crc8_lut_1d);
+
   watchdog_init();
 
   puts("**** INTERRUPTS ON ****\n");
@@ -314,7 +350,7 @@ int main(void) {
 
   // main pedal loop
   while (1) {
-    pedal();
+    ibst();
   }
 
   return 0;
