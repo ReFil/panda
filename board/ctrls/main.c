@@ -25,8 +25,9 @@
 #include "drivers/usb.h"
 
 #define CAN CAN1
+#define DEBUG
 
-//#define ADC
+//#define ADCE
 //#define ENCODER
 #define BUTTONS
 
@@ -158,11 +159,11 @@ void CAN1_RX0_IRQ_Handler(void) {
       if (lut_checksum(dat, 3, crc8_lut_1d) == dat[0]) {
         enabled = ((dat[1] >> 7) & 1U) != 0U;
         setspeed = dat[2];
-        #ifdef DEBUG
-          puts("enable detected");
-          puth(setspeed);
-          puts("\n");
-        #endif
+
+        puts("enable detected");
+        puth(setspeed);
+        puts("\n");
+
         if (enabled) {
         }
         else {
@@ -192,14 +193,14 @@ volatile uint8_t oldbtns[4];
 bool led_value = 0;
 
 void update_eon(void) {
-  #ifdef DEBUG
+
     puth(TIM3->CNT);
     puts(" ");
     puth(state);
     puts(" ");
-    puth(set_btn);
+    puth(btns[0]);
     puts("\n");
-  #endif
+
 
   // check timer for sending the user pedal and clearing the CAN
   if ((CAN->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
@@ -256,8 +257,8 @@ void TIM3_IRQ_Handler(void) {
 
 void loop(void) {
   // read/write
-
-#ifdef ADC
+puts("hellooo");
+#ifdef ADCE
   uint16_t value;
   value = adc_get(ADCCHAN_ACCEL0);
   puth(value);
@@ -334,12 +335,11 @@ int main(void) {
   // init board
   current_board->init();
 
-#ifdef CTRLS_USB
   // enable USB
   usb_init();
-#endif
+  puts("bemis");
 
-#ifdef ADC
+#ifdef ADCE
   adc_init();
   set_gpio_mode(GPIOC, 0, MODE_ANALOG);
 #endif

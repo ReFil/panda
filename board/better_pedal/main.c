@@ -284,10 +284,7 @@ int main(void) {
   // init board
   current_board->init();
 
-#ifdef PEDAL_USB
-  // enable USB
   usb_init();
-#endif
 
   // pedal stuff
   dac_init();
