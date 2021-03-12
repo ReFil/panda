@@ -25,11 +25,10 @@
 #include "drivers/usb.h"
 
 #define CAN CAN1
-#define DEBUG
 
-//#define ADCE
+#define ADCE
 //#define ENCODER
-#define BUTTONS
+//#define BUTTONS
 
 
 
@@ -133,9 +132,6 @@ uint8_t crc8_lut_1d[256];
 
 void CAN1_RX0_IRQ_Handler(void) {
   while ((CAN->RF0R & CAN_RF0R_FMP0) != 0) {
-    #ifdef DEBUG
-      puts("CAN RX\n");
-    #endif
     int address = CAN->sFIFOMailBox[0].RIR >> 21;
     if (address == CAN_CTRLS_INPUT) {
       // softloader entry
@@ -159,11 +155,6 @@ void CAN1_RX0_IRQ_Handler(void) {
       if (lut_checksum(dat, 3, crc8_lut_1d) == dat[0]) {
         enabled = ((dat[1] >> 7) & 1U) != 0U;
         setspeed = dat[2];
-
-        puts("enable detected");
-        puth(setspeed);
-        puts("\n");
-
         if (enabled) {
         }
         else {
@@ -194,14 +185,6 @@ bool led_value = 0;
 
 void update_eon(void) {
 
-    puth(TIM3->CNT);
-    puts(" ");
-    puth(state);
-    puts(" ");
-    puth(btns[0]);
-    puts("\n");
-
-
   // check timer for sending the user pedal and clearing the CAN
   if ((CAN->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     uint8_t dat[3];
@@ -215,9 +198,6 @@ void update_eon(void) {
   } else {
     // old can packet hasn't sent!
     state = FAULT_SEND;
-    #ifdef DEBUG
-      puts("CAN MISS\n");
-    #endif
   }
 
   // blink the LED
@@ -256,19 +236,25 @@ void TIM3_IRQ_Handler(void) {
 // ***************************** main code *****************************
 
 void loop(void) {
-  // read/write
-puts("hellooo");
 #ifdef ADCE
   uint16_t value;
   value = adc_get(ADCCHAN_ACCEL0);
-  puth(value);
-  puts("\n");
-  if(value < 1)
-  {}
-  else if((value < 2) && (value > 1))
-  {}
-  else if((value < 3) && (value > 2))
-  {}
+  btns[0] = 0;
+  btns[1] = 0;
+  btns[2] = 0;
+  btns[3] = 0;
+  if(value < 110) {
+    //do nothing
+  }
+  else if((value < 200) && (value > 110)) {
+    btns[2] = 1;
+  }
+  else if((value < 340) && (value > 260)) {
+    btns[3] = 1;
+  }
+  else if((value < 670) && (value > 600)) {
+    btns[1] = 0;
+  }
 #endif
 #ifdef ENCODER
   switch (encoderCount) {
@@ -337,7 +323,6 @@ int main(void) {
 
   // enable USB
   usb_init();
-  puts("bemis");
 
 #ifdef ADCE
   adc_init();
