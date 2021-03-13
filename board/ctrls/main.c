@@ -31,9 +31,6 @@
 //#define BUTTONS
 
 
-
-
-
 #define ENTER_BOOTLOADER_MAGIC 0xdeadbeef
 uint32_t enter_bootloader_mode;
 
@@ -180,9 +177,12 @@ void CAN1_SCE_IRQ_Handler(void) {
 
 volatile uint8_t btns[4]; // order set, cancel, speed up, speed down
 volatile uint8_t oldbtns[4];
+bool adcbuttontriggered = false;
+uint16_t adcbuttoncounter = 0;
 
 bool led_value = 0;
 
+//Send controls can data
 void update_eon(void) {
 
   // check timer for sending the user pedal and clearing the CAN
@@ -236,140 +236,169 @@ void TIM3_IRQ_Handler(void) {
 // ***************************** main code *****************************
 
 void loop(void) {
-#ifdef ADCE
-  uint16_t value;
-  value = adc_get(ADCCHAN_ACCEL0);
-  btns[0] = 0;
-  btns[1] = 0;
-  btns[2] = 0;
-  btns[3] = 0;
-  if(value < 110) {
-    //do nothing
-  }
-  else if((value < 200) && (value > 110)) {
-    btns[2] = 1;
-  }
-  else if((value < 340) && (value > 260)) {
-    btns[3] = 1;
-  }
-  else if((value < 670) && (value > 600)) {
-    btns[1] = 0;
-  }
-#endif
-#ifdef ENCODER
-  switch (encoderCount) {
-    case 1:
-      btns[2] = 1;
-      btns[3] = 0;
-      break;
-    case 2:
-      btns[2] = 0;
-      btns[3] = 0;
-      break;
-    case 3:
-      btns[2] = 0;
-      btns[3] = 1;
-      break;
-  }
-  btns[0] = !get_gpio_input(GPIOA, 10);
-  btns[1] = !get_gpio_input(GPIOC, 0);
-#endif
-#ifdef BUTTONS
-  btns[0] = !get_gpio_input(GPIOA, 8);
-  btns[1] = !get_gpio_input(GPIOC, 0);
-  btns[2] = !get_gpio_input(GPIOA, 10);
-  btns[3] = !get_gpio_input(GPIOA, 9);
-#endif
+	#ifdef ADCE
+	  uint16_t value;
+	  value = adc_get(ADCCHAN_ACCEL0);
+	  
+	  if(value < 110) {
+	  	if(adcbuttontriggered){adcbuttoncounter++;}
 
-  if(btns[0] && enabled && !oldbtns[0]){ //if set button pressed but system is already enabled
-    btns[0] = 0;
-    btns[1] = 1; //cancel instead
-  }
-  if(btns[0] != oldbtns[0] || btns[1] != oldbtns[1] || btns[2] != oldbtns[2] || btns[3] != oldbtns[3]) {//if button values have changed
-    update_eon(); //send new button values to eon
-  }
+	  	if(adcbuttoncounter > 65000){
+	  		update_eon();
+	  		adcbuttontriggered = false;
+	  		adcbuttoncounter = 0;
+	  		btns[0] = 0;
+			btns[1] = 0;
+			btns[2] = 0;
+			btns[3] = 0;
+	  	}
+	    
+	  }
+	  else if((value > 110) && (value < 200)) {	//Increase speed
+	  	btns[0] = 0;
+		btns[1] = 0;
+		btns[2] = 1;
+		btns[3] = 0;
+	    adcbuttontriggered = true;
+	    adcbuttoncounter = 0;
+	  }
+	  else if((value > 260) && (value < 340)) {	//Decrease speed
+	  	btns[0] = 0;
+		btns[1] = 0;
+		btns[2] = 0;
+		btns[3] = 1;
+	    adcbuttontriggered = true;
+	    adcbuttoncounter = 0;
+	  }
+	  else if((value > 600) && (value < 670)) {	//Cruise set/cancel
+	   	btns[0] = 1;
+		btns[1] = 0;
+		btns[2] = 0;
+		btns[3] = 0;
+	    adcbuttontriggered = true;
+	    adcbuttoncounter = 0;
+	  }
+	#endif
+	
+	#ifdef ENCODER
+	  switch (encoderCount) {
+	    case 1:
+	      btns[2] = 1;
+	      btns[3] = 0;
+	      break;
+	    case 2:
+	      btns[2] = 0;
+	      btns[3] = 0;
+	      break;
+	    case 3:
+	      btns[2] = 0;
+	      btns[3] = 1;
+	      break;
+	  }
+	  btns[0] = !get_gpio_input(GPIOA, 10);
+	  btns[1] = !get_gpio_input(GPIOC, 0);
+	#endif
+	
+	#ifdef BUTTONS
+	  btns[0] = !get_gpio_input(GPIOA, 8);
+	  btns[1] = !get_gpio_input(GPIOC, 0);
+	  btns[2] = !get_gpio_input(GPIOA, 10);
+	  btns[3] = !get_gpio_input(GPIOA, 9);
+	#endif
 
-  oldbtns[0] = btns[0];
-  oldbtns[1] = btns[1];
-  oldbtns[2] = btns[2];
-  oldbtns[3] = btns[3];
+	if(btns[0] && enabled && !oldbtns[0]){ //if set button pressed but system is already enabled
+		btns[0] = 0;
+		btns[1] = 1; //cancel instead
+	}
+	if(btns[0] != oldbtns[0] || btns[1] != oldbtns[1] || btns[2] != oldbtns[2] || btns[3] != oldbtns[3]) {//if button values have changed
+		#ifdef ENCODER
+			update_eon(); //send new button values to eon
+		#endif
+		#ifdef BUTTONS
+			update_eon(); //send new button values to eon
+		#endif
 
-  watchdog_feed();
+	}
+
+	oldbtns[0] = btns[0];
+	oldbtns[1] = btns[1];
+	oldbtns[2] = btns[2];
+	oldbtns[3] = btns[3];
+
+	watchdog_feed();
 }
 
 int main(void) {
-  // Init interrupt table
-  init_interrupts(true);
+	// Init interrupt table
+	init_interrupts(true);
 
-  REGISTER_INTERRUPT(CAN1_TX_IRQn, CAN1_TX_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
-  REGISTER_INTERRUPT(CAN1_RX0_IRQn, CAN1_RX0_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
-  REGISTER_INTERRUPT(CAN1_SCE_IRQn, CAN1_SCE_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
+	REGISTER_INTERRUPT(CAN1_TX_IRQn, CAN1_TX_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
+	REGISTER_INTERRUPT(CAN1_RX0_IRQn, CAN1_RX0_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
+	REGISTER_INTERRUPT(CAN1_SCE_IRQn, CAN1_SCE_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
 
-  // Should run at around 732Hz (see init below)
-  #ifdef ENCODER
-  REGISTER_INTERRUPT(TIM3_IRQn, TIM3_IRQ_Handler, 1000U, FAULT_INTERRUPT_RATE_TIM3)
-  #endif
+	// Should run at around 732Hz (see init below)
+	#ifdef ENCODER
+		REGISTER_INTERRUPT(TIM3_IRQn, TIM3_IRQ_Handler, 1000U, FAULT_INTERRUPT_RATE_TIM3)
+	#endif
 
-  disable_interrupts();
+	disable_interrupts();
 
-  // init devices
-  clock_init();
-  peripherals_init();
-  detect_configuration();
-  detect_board_type();
+	// init devices
+	clock_init();
+	peripherals_init();
+	detect_configuration();
+	detect_board_type();
 
-  // init board
-  current_board->init();
+	// init board
+	current_board->init();
 
-  // enable USB
-  usb_init();
+	// enable USB
+	usb_init();
 
-#ifdef ADCE
-  adc_init();
-  set_gpio_mode(GPIOC, 0, MODE_ANALOG);
-#endif
-#ifdef BUTTONS
-  set_gpio_mode(GPIOC, 0, MODE_INPUT);
-  set_gpio_pullup(GPIOC, 0, PULL_UP);
-#endif
-  set_gpio_mode(GPIOA, 8, MODE_INPUT);
-  set_gpio_mode(GPIOA, 9, MODE_INPUT);
-  set_gpio_mode(GPIOA, 10, MODE_INPUT);
-  set_gpio_pullup(GPIOA, 8, PULL_UP);
-  set_gpio_pullup(GPIOA, 9, PULL_UP);
-  set_gpio_pullup(GPIOA, 10, PULL_UP);
+	#ifdef ADCE
+		adc_init();
+		set_gpio_mode(GPIOC, 0, MODE_ANALOG);
+	#endif
+	#ifdef BUTTONS
+		set_gpio_mode(GPIOC, 0, MODE_INPUT);
+		set_gpio_pullup(GPIOC, 0, PULL_UP);
+	#endif
+	set_gpio_mode(GPIOA, 8, MODE_INPUT);
+	set_gpio_mode(GPIOA, 9, MODE_INPUT);
+	set_gpio_mode(GPIOA, 10, MODE_INPUT);
+	set_gpio_pullup(GPIOA, 8, PULL_UP);
+	set_gpio_pullup(GPIOA, 9, PULL_UP);
+	set_gpio_pullup(GPIOA, 10, PULL_UP);
 
-  // init can
-  bool llcan_speed_set = llcan_set_speed(CAN1, 5000, false, false);
-  if (!llcan_speed_set) {
-    puts("Failed to set llcan speed");
-  }
+	// init can
+	bool llcan_speed_set = llcan_set_speed(CAN1, 5000, false, false);
+	if (!llcan_speed_set) {
+		puts("Failed to set llcan speed");
+	}
 
-  bool ret = llcan_init(CAN1);
-  UNUSED(ret);
+	bool ret = llcan_init(CAN1);
+	UNUSED(ret);
 
-  // 48mhz / 65536 ~= 732
-#ifdef ENCODER
-  timer_init(TIM3, 15);
-  NVIC_EnableIRQ(TIM3_IRQn);
-#endif
-  btns[0] = 0;
-  btns[1] = 0;
-  btns[2] = 0;
-  btns[3] = 0;
+	// 48mhz / 65536 ~= 732
+	#ifdef ENCODER
+		timer_init(TIM3, 15);
+		NVIC_EnableIRQ(TIM3_IRQn);
+	#endif
+	
+	btns[0] = 0;
+	btns[1] = 0;
+	btns[2] = 0;
+	btns[3] = 0;
 
-  gen_crc_lookup_table(crc_poly, crc8_lut_1d);
-  update_eon();
-  watchdog_init();
-  current_board->set_led(LED_GREEN, 1);
+	gen_crc_lookup_table(crc_poly, crc8_lut_1d);
+	update_eon();
+	watchdog_init();
+	current_board->set_led(LED_GREEN, 1);
 
-  puts("**** INTERRUPTS ON ****\n");
-  enable_interrupts();
+	puts("**** INTERRUPTS ON ****\n");
+	enable_interrupts();
 
-  // main CTRLS loop
-  while (1) {
-    loop();
-  }
-
-  return 0;
+	// main CTRLS loop
+	while (1) {loop();}
+	return 0;
 }
