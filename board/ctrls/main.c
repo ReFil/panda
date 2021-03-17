@@ -26,8 +26,8 @@
 
 #define CAN CAN1
 
-#define ADCE
-//#define ENCODER
+//#define ADCE
+#define ENCODER
 //#define BUTTONS
 
 
@@ -214,24 +214,14 @@ void update_eon(void) {
   }
 }
 
-volatile uint8_t encoderCount = 2;
 
 void TIM3_IRQ_Handler(void) {
-  static uint8_t ABs = 0;
-  ABs = (ABs << 2) & 0x0f; //left 2 bits now contain the previous AB key read-out;
-  ABs |= (get_gpio_input(GPIOA, 8) << 1) | get_gpio_input(GPIOA, 9);
-  encoderCount = 2;
-  switch (ABs)
-  {
-    case 0x0d:
-      encoderCount = 3;
-      break;
-    case 0x0e:
-      encoderCount = 1;
-      break;
-  }
+
 }
 
+uint16_t counter = 0;
+bool lastState;
+bool currentState;
 
 // ***************************** main code *****************************
 
@@ -239,7 +229,7 @@ void loop(void) {
 	#ifdef ADCE
 	  uint16_t value;
 	  value = adc_get(ADCCHAN_ACCEL0);
-	  
+
 	  if(value < 110) {
 	  	if(adcbuttontriggered){adcbuttoncounter++;}
 
@@ -252,7 +242,7 @@ void loop(void) {
 			btns[2] = 0;
 			btns[3] = 0;
 	  	}
-	    
+
 	  }
 	  else if((value > 110) && (value < 200)) {	//Increase speed
 	  	btns[0] = 0;
@@ -279,26 +269,40 @@ void loop(void) {
 	    adcbuttoncounter = 0;
 	  }
 	#endif
-	
+  btns[0] = 0;
+  btns[1] = 0;
+  btns[2] = 0;
+  btns[3] = 0;
+
 	#ifdef ENCODER
-	  switch (encoderCount) {
-	    case 1:
-	      btns[2] = 1;
-	      btns[3] = 0;
-	      break;
-	    case 2:
-	      btns[2] = 0;
-	      btns[3] = 0;
-	      break;
-	    case 3:
-	      btns[2] = 0;
-	      btns[3] = 1;
-	      break;
-	  }
+
+
+
+  currentState = get_gpio_input(GPIOA, 8);
+  // If last and current state of CLK are different, then pulse occurred
+  // React to only 1 state change to avoid double count
+  if (currentState != lastState  && currentState) {
+
+  // If the DT state is different than the CLK state then
+  // the encoder is rotating CCW so decrement
+  if (get_gpio_input(GPIOA, 9) != currentState) {
+    btns[2] = 0;
+    btns[3] = 1;
+  }
+  else {
+    // Encoder is rotating CW so increment
+    btns[2] = 1;
+    btns[3] = 0;
+
+  }
+  }
+
+  // Remember last CLK state
+    lastState = currentState;
 	  btns[0] = !get_gpio_input(GPIOA, 10);
-	  btns[1] = !get_gpio_input(GPIOC, 0);
+	  //btns[1] = !get_gpio_input(GPIOC, 0);
 	#endif
-	
+
 	#ifdef BUTTONS
 	  btns[0] = !get_gpio_input(GPIOA, 8);
 	  btns[1] = !get_gpio_input(GPIOC, 0);
@@ -335,12 +339,10 @@ int main(void) {
 	REGISTER_INTERRUPT(CAN1_TX_IRQn, CAN1_TX_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
 	REGISTER_INTERRUPT(CAN1_RX0_IRQn, CAN1_RX0_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
 	REGISTER_INTERRUPT(CAN1_SCE_IRQn, CAN1_SCE_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
+  //REGISTER_INTERRUPT(TIM3_IRQn, TIM3_IRQ_Handler, 1000U, FAULT_INTERRUPT_RATE_TIM3)
+
 
 	// Should run at around 732Hz (see init below)
-	#ifdef ENCODER
-		REGISTER_INTERRUPT(TIM3_IRQn, TIM3_IRQ_Handler, 1000U, FAULT_INTERRUPT_RATE_TIM3)
-	#endif
-
 	disable_interrupts();
 
 	// init devices
@@ -380,11 +382,10 @@ int main(void) {
 	UNUSED(ret);
 
 	// 48mhz / 65536 ~= 732
-	#ifdef ENCODER
-		timer_init(TIM3, 15);
-		NVIC_EnableIRQ(TIM3_IRQn);
-	#endif
-	
+  //timer_init(TIM3, 15);
+  //NVIC_EnableIRQ(TIM3_IRQn);
+
+
 	btns[0] = 0;
 	btns[1] = 0;
 	btns[2] = 0;
