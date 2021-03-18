@@ -212,6 +212,10 @@ void update_eon(void) {
   } else {
     timeout += 1U;
   }
+  uint32_t startTick = DWT->CYCCNT,
+  delayTicks = 100 * (SystemCoreClock/1000000);
+
+  while (DWT->CYCCNT - startTick < delayTicks);
 }
 
 
@@ -380,6 +384,12 @@ int main(void) {
 
 	bool ret = llcan_init(CAN1);
 	UNUSED(ret);
+
+  if (!(CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk)) {
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+  }
 
 	// 48mhz / 65536 ~= 732
   //timer_init(TIM3, 15);

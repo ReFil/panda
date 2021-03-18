@@ -89,9 +89,7 @@ int usb_cb_control_msg(USB_Setup_TypeDef *setup, uint8_t *resp, bool hardwired) 
 
 
 // ***************************** can port *****************************
-
-// addresses to be used on CAN
-#define CAN_UPDATE  0x341
+#define CAN_UPDATE  0x341 //bootloader
 #define COUNTER_CYCLE 0xFU
 
 void CAN1_TX_IRQ_Handler(void) {
@@ -114,6 +112,10 @@ uint8_t current_speed = 0;
 uint16_t q_target_ext = 0;
 bool q_target_ext_qf = 0;
 
+uint16_t output_rod_target = 0;
+bool brake_applied = 0;
+uint8_t ibooster_status = 0;
+
 uint8_t can1_count_out = 0;
 uint8_t can1_count_in;
 uint8_t can2_count_out_1 = 0;
@@ -132,6 +134,8 @@ uint32_t current_index = 0;
 #define FAULT_STARTUP 4U
 #define FAULT_TIMEOUT 5U
 #define FAULT_INVALID 6U
+#define FAULT_COUNTER 7U
+
 uint8_t state = FAULT_STARTUP;
 
 #define NO_EXTFAULT1 0U
@@ -177,8 +181,30 @@ void CAN1_RX0_IRQ_Handler(void) {
         for (int i=0; i<8; i++) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
+        uint64_t *data = (uint8_t *)&dat;
+        uint8_t index = dat[6] & COUNTER_CYCLE;
+        if(dat[0] = lut_checksum(dat, 8, crc8_lut_1d)) {
+          if (((current_index + 1U) & COUNTER_CYCLE) == index) {
+            //if counter and checksum valid accept commands
+            q_target_ext = (data >> 14);
+            q_target_ext_qf = (data >> 12);
+          }
+          else {
+            state = FAULT_COUNTER;
+          }
+        }
+        else {
+          state = FAULT_BAD_CHECKSUM;
+        }
         break;
+      case 0x366:
+        uint8_t dat[4];
+        for (int i=0; i<8; i++) {
+          dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
+        }
+        if(dat[0] = lut_checksum(dat, 4, crc8_lut_1d)) {
 
+        }
       default:
     }
     // next
