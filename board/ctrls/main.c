@@ -281,7 +281,7 @@ void loop(void) {
   currentState = get_gpio_input(GPIOA, 8);
   // If last and current state of CLK are different, then pulse occurred
   // React to only 1 state change to avoid double count
-  if (currentState != lastState  && currentState) {
+  if (currentState != lastState) {
 
   // If the DT state is different than the CLK state then
   // the encoder is rotating CCW so decrement
