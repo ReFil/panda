@@ -212,10 +212,6 @@ void update_eon(void) {
   } else {
     timeout += 1U;
   }
-  uint32_t startTick = DWT->CYCCNT,
-  delayTicks = 100 * (SystemCoreClock/1000000);
-
-  while (DWT->CYCCNT - startTick < delayTicks);
 }
 
 
@@ -299,6 +295,15 @@ void loop(void) {
     btns[3] = 0;
 
   }
+  update_eon();
+  uint32_t startTick = DWT->CYCCNT,
+  delayTicks = 100 * 4800;
+
+  while (DWT->CYCCNT - startTick < delayTicks);
+  btns[2] = 0;
+  btns[3] = 0;
+  update_eon();
+
   }
 
   // Remember last CLK state
