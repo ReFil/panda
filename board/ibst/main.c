@@ -332,15 +332,25 @@ void CAN3_SCE_IRQ_Handler(void) {
 
 bool sent;
 
+#define P_LIMIT_EXTERNAL 120
+
+#define P_EST_MAX 0
+#define P_EST_MAX_QF 1
+#define VEHICLE_QF 1
+#define IGNITION_ON 0
+
+#define P_TARGET_DRIVER 0
+#define P_TARGET_DRIVER_QF 0
+#define ABS_ACTIVE 0
 
 
 void TIM3_IRQ_Handler(void) {
   // check timer for sending the user pedal and clearing the CAN
   if ((CAN2->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     uint8_t dat[8]; //sendESP_private3
-    //uint16_t pTargetDriver = P_TARGET_DRIVER * 4
-    dat[2] = 0x0;
-    dat[3] = 0x0;
+    uint16_t pTargetDriver = P_TARGET_DRIVER * 4
+    dat[2] = pTargetDriver & 0xFFU;
+    dat[3] = (pTargetDriver & 0x3U) >> 8;
     dat[4] = 0x0;
     dat[5] = 0x0;
     dat[6] = 0x0;
@@ -351,8 +361,7 @@ void TIM3_IRQ_Handler(void) {
     CAN->sTxMailBox[0].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
     CAN->sTxMailBox[0].TDTR = 8;  // len of packet is 5
     CAN->sTxMailBox[0].TIR = (0x38D << 21) | 1U;
-    can2_count_out_1++;
-    can2_count_out_1 &= COUNTER_CYCLE;
+
   }
   else {
     // old can packet hasn't sent!
