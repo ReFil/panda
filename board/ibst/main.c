@@ -114,7 +114,11 @@ bool q_target_ext_qf = 0;
 
 uint16_t output_rod_target = 0;
 bool brake_applied = 0;
-uint8_t ibooster_status = 0;
+bool brake_ok = 0;
+
+uint8_t ibst_status;
+uint8_t ext_req_status;
+
 
 uint8_t can1_count_out = 0;
 uint8_t can1_count_in;
@@ -122,10 +126,11 @@ uint8_t can2_count_out_1 = 0;
 uint8_t can2_count_out_2 = 0;
 uint8_t can2_count_in_1;
 uint8_t can2_count_in_2;
+uint8_t can2_count_in_3;
 
 #define MAX_TIMEOUT 10U
 uint32_t timeout = 0;
-uint32_t current_index = 0;
+
 
 #define NO_FAULT 0U
 #define FAULT_BAD_CHECKSUM 1U
@@ -145,6 +150,11 @@ uint8_t state = FAULT_STARTUP;
 #define EXTFAULT1_COUNTER1 4U
 #define EXTFAULT1_COUNTER2 5U
 #define EXTFAULT1_TIMEOUT 6U
+#define EXTFAULT1_SEND1 7U
+#define EXTFAULT1_SEND2 8U
+#define EXTFAULT1_SEND3 9U
+
+uint8_t can2state = NO_EXTFAULT1;
 
 #define NO_EXTFAULT2 0U
 #define EXTFAULT2_CHECKSUM1 1U
@@ -182,12 +192,13 @@ void CAN1_RX0_IRQ_Handler(void) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
         uint64_t *data = (uint8_t *)&dat;
-        uint8_t index = dat[6] & COUNTER_CYCLE;
+        uint8_t index = dat[1] & COUNTER_CYCLE;
         if(dat[0] = lut_checksum(dat, 8, crc8_lut_1d)) {
-          if (((current_index + 1U) & COUNTER_CYCLE) == index) {
+          if (((can1_count_in + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
             q_target_ext = (data >> 14);
             q_target_ext_qf = (data >> 12);
+            can1_count_in++;
           }
           else {
             state = FAULT_COUNTER;
@@ -199,11 +210,14 @@ void CAN1_RX0_IRQ_Handler(void) {
         break;
       case 0x366:
         uint8_t dat[4];
-        for (int i=0; i<8; i++) {
+        for (int i=0; i<4; i++) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
         if(dat[0] = lut_checksum(dat, 4, crc8_lut_1d)) {
-
+          current_speed = data[3];
+        }
+        else {
+          state = FAULT_BAD_CHECKSUM;
         }
       default:
     }
@@ -222,16 +236,70 @@ void CAN2_RX0_IRQ_Handler(void) {
     puts("CAN2 RX\n");
     uint16_t address = CAN2->sFIFOMailBox[0].RIR >> 21;
     switch (address) {
+    /*  case 0x391:
+        uint8_t dat[5];
+        for (int i=0; i<5; i++) {
+          dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
+        }
+        uint64_t *data = (uint8_t *)&dat;
+        uint8_t index = dat[6] & COUNTER_CYCLE;
+        if(dat[0] = lut_checksum(dat, 8, crc8_lut_1d)) {
+          if (((can2_count_in1 + 1U) & COUNTER_CYCLE) == index) {
+            //if counter and checksum valid accept commands
+            ebr_mode = (dat[1] >> 4) & 0x7;
+            ebr_system_mode = (data >> 15) & 0x7;
+            can2_count_in1++;
+          }
+          else {
+            state = EXTFAULT1_COUNTER1;
+          }
+        }
+        else {
+          state = EXTFAULT1_CHECKSUM1;
+        }
+        break;*/
       case 0x38E:
         uint8_t dat[8];
         for (int i=0; i<8; i++) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
+        }
+        uint64_t *data = (uint8_t *)&dat;
+        uint8_t index = dat[6] & COUNTER_CYCLE;
+        if(dat[0] = lut_checksum(dat, 8, crc8_lut_1d)) {
+          if (((can2_count_in1 + 1U) & COUNTER_CYCLE) == index) {
+            //if counter and checksum valid accept commands
+            output_rod_target = ((data >> 24) & 0x3FU);
+            can2_count_in1++;
+          }
+          else {
+            state = EXTFAULT1_COUNTER2;
+          }
+        }
+        else {
+          state = EXTFAULT1_CHECKSUM2;
         }
         break;
       case 0x38F:
         uint8_t dat[8];
         for (int i=0; i<8; i++) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
+        }
+        uint64_t *data = (uint8_t *)&dat;
+        uint8_t index = dat[1] & COUNTER_CYCLE;
+        if(dat[0] = lut_checksum(dat, 8, crc8_lut_1d)) {
+          if (((can2_count_in3 + 1U) & COUNTER_CYCLE) == index) {
+            //if counter and checksum valid accept commands
+            ibst_status = (data >> 19) & 0x7;
+            brake_applied = (dat[2] & 0x1) & ((dat[2] >>) 1 & 0x1);
+
+            can2_count_in3++;
+          }
+          else {
+            state = EXTFAULT1_COUNTER3;
+          }
+        }
+        else {
+          state = EXTFAULT1_CHECKSUM3;
         }
         break;
       default:
@@ -262,34 +330,115 @@ void CAN3_SCE_IRQ_Handler(void) {
 }
 
 
+bool sent;
 
 
 
 void TIM3_IRQ_Handler(void) {
   // check timer for sending the user pedal and clearing the CAN
-  if ((CAN->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
-    uint8_t dat[8];
-    dat[1] = (pdl0 >> 0) & 0xFFU;
-    dat[2] = (pdl0 >> 8) & 0xFFU;
-    dat[3] = (pdl1 >> 0) & 0xFFU;
-    dat[4] = (pdl1 >> 8) & 0xFFU;
-    dat[5] = ((state & 0xFU) << 4) | pkt_idx;
-    dat[0] = lut_checksum(dat, CAN_GAS_SIZE, crc8_lut_1d);
+  if ((CAN2->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
+    uint8_t dat[8]; //sendESP_private3
+    //uint16_t pTargetDriver = P_TARGET_DRIVER * 4
+    dat[2] = 0x0;
+    dat[3] = 0x0;
+    dat[4] = 0x0;
+    dat[5] = 0x0;
+    dat[6] = 0x0;
+    dat[7] = 0x0;
+    dat[1] = can2_count_out_1;
+    dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
     CAN->sTxMailBox[0].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
-    CAN->sTxMailBox[0].TDHR = dat[4] | (dat[5] << 8);
-    CAN->sTxMailBox[0].TDTR = 6;  // len of packet is 5
-    CAN->sTxMailBox[0].TIR = (CAN_GAS_OUTPUT << 21) | 1U;
-    ++pkt_idx;
-    pkt_idx &= COUNTER_CYCLE;
+    CAN->sTxMailBox[0].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
+    CAN->sTxMailBox[0].TDTR = 8;  // len of packet is 5
+    CAN->sTxMailBox[0].TIR = (0x38D << 21) | 1U;
+    can2_count_out_1++;
+    can2_count_out_1 &= COUNTER_CYCLE;
+  }
+  else {
+    // old can packet hasn't sent!
+    state = EXTFAULT1_SEND1;
+    #ifdef DEBUG
+      puts("CAN2 MISS1\n");
+    #endif
+  }
+  if ((CAN2->TSR & CAN_TSR_TME1) == CAN_TSR_TME1) {
+    uint64_t dat; //sendESP_private2
+    uint16_t p_limit_external = P_LIMIT_EXTERNAL * 2;
+    uint8_t *datPointer = (uint8_t *)&dat;
+
+    dat = (uint64_t) ((p_limit_external & 0x1FF) << 16);
+    dat |= (q_target_ext << 28);
+    dat |= (q_target_ext_qf << 44)
+
+    dat[1] = can2_count_out_1;
+    dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
+    CAN2->sTxMailBox[1].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
+    CAN2->sTxMailBox[1].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16);
+    CAN2->sTxMailBox[1].TDTR = 7;  // len of packet is 5
+    CAN2->sTxMailBox[1].TIR = (0x38C << 21) | 1U;
+    can2_count_out_1++;
+    can2_count_out_1 &= COUNTER_CYCLE;
+  }
+  else {
+    // old can packet hasn't sent!
+    state = EXTFAULT1_SEND2;
+    #ifdef DEBUG
+      puts("CAN2 MISS2\n");
+    #endif
+  }
+  if (((CAN2->TSR & CAN_TSR_TME2) == CAN_TSR_TME2) & sent) {
+    uint64_t dat; //sendESP_private2
+    uint8_t *datPointer = (uint8_t *)&dat;
+
+    dat = P_EST_MAX << 16;
+    dat |= P_EST_MAX_QF << 24;
+    dat |= ((((uint32_t) current_speed*16)/9)& 0x3FFF) << 24;
+    dat |= VEHICLE_QF << 40;
+    dat |= IGNITION_ON << 43;
+
+    dat[1] = can2_count_out_2;
+    dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
+    CAN2->sTxMailBox[2].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
+    CAN2->sTxMailBox[2].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
+    CAN2->sTxMailBox[2].TDTR = 8;  // len of packet is 5
+    CAN2->sTxMailBox[2].TIR = (0x38B << 21) | 1U;
+    can2_count_out_2++;
+    can2_count_out_2 &= COUNTER_CYCLE;
+  }
+  else {
+    // old can packet hasn't sent!
+    state = EXTFAULT1_SEND3;
+    #ifdef DEBUG
+      puts("CAN2 MISS3\n");
+    #endif
+  }
+  sent = !sent;
+
+
+  //send to EON
+  if ((CAN1->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
+    uint8_t dat[5];
+    brake_ok = (ibst_status && 0x7);
+    dat[2] = brake_ok | brake_applied << 1;
+    dat[3] = output_rod_target & 0xFF;
+    dat[4] = ((output_rod_target & 0x00) >> 8);
+
+    dat[1] = ((state & 0xFU) << 4) | can1_count_out;
+    dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
+    CAN1->sTxMailBox[0].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
+    CAN1->sTxMailBox[0].TDHR = dat[4];
+    CAN1->sTxMailBox[0].TDTR = 5;  // len of packet is 5
+    CAN1->sTxMailBox[0].TIR = (0x38D << 21) | 1U;
+    can1_count_out++;
+    can1_count_out &= COUNTER_CYCLE;
   }
   else {
     // old can packet hasn't sent!
     state = FAULT_SEND;
     #ifdef DEBUG
-      puts("CAN MISS\n");
+      puts("CAN2 MISS1\n");
     #endif
   }
-
   // blink the LED
   current_board->set_led(LED_GREEN, led_value);
   led_value = !led_value;
