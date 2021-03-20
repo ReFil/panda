@@ -523,8 +523,12 @@ int main(void) {
   gen_crc_lookup_table(crc_poly, crc8_lut_1d);
 
   // 48mhz / 65536 ~= 732
-  timer_init(TIM3, 8);
+  timer_init(TIM3, 7);
   NVIC_EnableIRQ(TIM3_IRQn);
+  //power on ibooster
+  set_gpio_mode(GPIOB, 12, MODE_OUTPUT);
+  set_gpio_output_type(GPIOB, 12, OUTPUT_TYPE_PUSH_PULL);
+  set_gpio_output(GPIOB, 12, 1);
 
 
   watchdog_init();
