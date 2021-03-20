@@ -22,9 +22,6 @@
 #include "drivers/uart.h"
 #include "drivers/usb.h"
 
-#define CAN1
-#define CAN2
-#define CAN3
 
 #define ENTER_BOOTLOADER_MAGIC 0xdeadbeef
 uint32_t enter_bootloader_mode;
@@ -146,13 +143,15 @@ uint8_t state = FAULT_STARTUP;
 #define NO_EXTFAULT1 0U
 #define EXTFAULT1_CHECKSUM1 1U
 #define EXTFAULT1_CHECKSUM2 2U
-#define EXTFAULT1_SCE 3U
-#define EXTFAULT1_COUNTER1 4U
-#define EXTFAULT1_COUNTER2 5U
-#define EXTFAULT1_TIMEOUT 6U
-#define EXTFAULT1_SEND1 7U
-#define EXTFAULT1_SEND2 8U
-#define EXTFAULT1_SEND3 9U
+#define EXTFAULT1_CHECKSUM3 3U
+#define EXTFAULT1_SCE 4U
+#define EXTFAULT1_COUNTER1 5U
+#define EXTFAULT1_COUNTER2 6U
+#define EXTFAULT1_COUNTER2 7U
+#define EXTFAULT1_TIMEOUT 8U
+#define EXTFAULT1_SEND1 9U
+#define EXTFAULT1_SEND2 10U
+#define EXTFAULT1_SEND3 11U
 
 uint8_t can2state = NO_EXTFAULT1;
 
@@ -193,7 +192,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         }
         uint64_t *data = (uint8_t *)&dat;
         uint8_t index = dat[1] & COUNTER_CYCLE;
-        if(dat[0] = lut_checksum(dat, 8, crc8_lut_1d)) {
+        if(dat[0] == lut_checksum(dat, 8, crc8_lut_1d)) {
           if (((can1_count_in + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
             q_target_ext = (data >> 14);
@@ -213,7 +212,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         for (int i=0; i<4; i++) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
-        if(dat[0] = lut_checksum(dat, 4, crc8_lut_1d)) {
+        if(dat[0] == lut_checksum(dat, 4, crc8_lut_1d)) {
           current_speed = data[3];
         }
         else {
@@ -265,7 +264,7 @@ void CAN2_RX0_IRQ_Handler(void) {
         }
         uint64_t *data = (uint8_t *)&dat;
         uint8_t index = dat[6] & COUNTER_CYCLE;
-        if(dat[0] = lut_checksum(dat, 8, crc8_lut_1d)) {
+        if(dat[0] == lut_checksum(dat, 8, crc8_lut_1d)) {
           if (((can2_count_in1 + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
             output_rod_target = ((data >> 24) & 0x3FU);
@@ -280,13 +279,13 @@ void CAN2_RX0_IRQ_Handler(void) {
         }
         break;
       case 0x38F:
-        uint8_t dat[8];
+        uint64_t data; //sendESP_private2
+        uint8_t *dat = (uint8_t *)&data;
         for (int i=0; i<8; i++) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
-        uint64_t *data = (uint8_t *)&dat;
         uint8_t index = dat[1] & COUNTER_CYCLE;
-        if(dat[0] = lut_checksum(dat, 8, crc8_lut_1d)) {
+        if(dat[0] == lut_checksum(dat, 8, crc8_lut_1d)) {
           if (((can2_count_in3 + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
             ibst_status = (data >> 19) & 0x7;
@@ -371,13 +370,13 @@ void TIM3_IRQ_Handler(void) {
     #endif
   }
   if ((CAN2->TSR & CAN_TSR_TME1) == CAN_TSR_TME1) {
-    uint64_t dat; //sendESP_private2
+    uint64_t data; //sendESP_private2
     uint16_t p_limit_external = P_LIMIT_EXTERNAL * 2;
-    uint8_t *datPointer = (uint8_t *)&dat;
+    uint8_t *dat = (uint8_t *)&data;
 
-    dat = (uint64_t) ((p_limit_external & 0x1FF) << 16);
-    dat |= (q_target_ext << 28);
-    dat |= (q_target_ext_qf << 44)
+    data = (uint64_t) ((p_limit_external & 0x1FF) << 16);
+    data |= (q_target_ext << 28);
+    data |= (q_target_ext_qf << 44);
 
     dat[1] = can2_count_out_1;
     dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
@@ -396,14 +395,14 @@ void TIM3_IRQ_Handler(void) {
     #endif
   }
   if (((CAN2->TSR & CAN_TSR_TME2) == CAN_TSR_TME2) & sent) {
-    uint64_t dat; //sendESP_private2
-    uint8_t *datPointer = (uint8_t *)&dat;
+    uint64_t data; //sendESP_private2
+    uint8_t *da = (uint8_t *)&data;
 
-    dat = P_EST_MAX << 16;
-    dat |= P_EST_MAX_QF << 24;
-    dat |= ((((uint32_t) current_speed*16)/9)& 0x3FFF) << 24;
-    dat |= VEHICLE_QF << 40;
-    dat |= IGNITION_ON << 43;
+    data = P_EST_MAX << 16;
+    data |= P_EST_MAX_QF << 24;
+    data |= ((((uint32_t) current_speed*16)/9)& 0x3FFF) << 24;
+    data |= VEHICLE_QF << 40;
+    data |= IGNITION_ON << 43;
 
     dat[1] = can2_count_out_2;
     dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
