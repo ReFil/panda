@@ -208,17 +208,17 @@ void CAN1_RX0_IRQ_Handler(void) {
         }
         break;
       case 0x366: ;
-        uint8_t dat[4];
+        uint8_t dat2[4];
         for (int i=0; i<4; i++) {
-          dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
+          dat2[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
-        if(dat[0] == lut_checksum(dat, 4, crc8_lut_1d)) {
-          current_speed = data[3];
+        if(dat2[0] == lut_checksum(dat2, 4, crc8_lut_1d)) {
+          current_speed = dat2[3];
         }
         else {
           state = FAULT_BAD_CHECKSUM;
         }
-      default:
+      default: ;
     }
     // next
     CAN1->RF0R |= CAN_RF0R_RFOM0;
@@ -234,6 +234,13 @@ void CAN2_RX0_IRQ_Handler(void) {
   while ((CAN2->RF0R & CAN_RF0R_FMP0) != 0) {
     puts("CAN2 RX\n");
     uint16_t address = CAN2->sFIFOMailBox[0].RIR >> 21;
+    if(address == 0x38E | address == 0x38F | address == 0x391) {
+      uint64_t data; //sendESP_private2
+      uint8_t *dat = (uint8_t *)&data;
+      for (int i=0; i<8; i++) {
+        dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
+      }
+    }
     switch (address) {
     /*  case 0x391:
         uint8_t dat[5];
@@ -258,17 +265,12 @@ void CAN2_RX0_IRQ_Handler(void) {
         }
         break;*/
       case 0x38E: ;
-        uint64_t data; //sendESP_private2
-        uint8_t *dat = (uint8_t *)&data;
-        for (int i=0; i<8; i++) {
-          dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
-        }
         uint8_t index = dat[6] & COUNTER_CYCLE;
         if(dat[0] == lut_checksum(dat, 8, crc8_lut_1d)) {
           if (((can2_count_in_1 + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
             output_rod_target = ((data >> 24) & 0x3FU);
-            can2_count_in1++;
+            can2_count_in_1++;
           }
           else {
             state = EXTFAULT1_COUNTER2;
@@ -279,19 +281,14 @@ void CAN2_RX0_IRQ_Handler(void) {
         }
         break;
       case 0x38F: ;
-        uint64_t data; //sendESP_private2
-        uint8_t *dat = (uint8_t *)&data;
-        for (int i=0; i<8; i++) {
-          dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
-        }
         uint8_t index = dat[1] & COUNTER_CYCLE;
         if(dat[0] == lut_checksum(dat, 8, crc8_lut_1d)) {
           if (((can2_count_in_3 + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
             ibst_status = (data >> 19) & 0x7;
-            brake_applied = (dat[2] & 0x1) & ((dat[2] >>) 1 & 0x1);
+            brake_applied = (dat[2] & 0x1) | !((dat[2] >> 1) & 0x1); //Sends brake applied if ibooster says brake applied or if there's a fault with the brake sensor, assumes worst case scenario
 
-            can2_count_in3++;
+            can2_count_in_3++;
           }
           else {
             state = EXTFAULT1_COUNTER3;
@@ -301,7 +298,7 @@ void CAN2_RX0_IRQ_Handler(void) {
           state = EXTFAULT1_CHECKSUM3;
         }
         break;
-      default:
+      default: ;
     }
     // next
     CAN2->RF0R |= CAN_RF0R_RFOM0;
@@ -376,7 +373,7 @@ void TIM3_IRQ_Handler(void) {
 
     data = (uint64_t) ((p_limit_external & 0x1FF) << 16);
     data |= (q_target_ext << 28);
-    data |= (q_target_ext_qf << 44);
+    data |= (uint64_t)(q_target_ext_qf << 44);
 
     dat[1] = can2_count_out_1;
     dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
