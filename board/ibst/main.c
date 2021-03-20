@@ -234,13 +234,6 @@ void CAN2_RX0_IRQ_Handler(void) {
   while ((CAN2->RF0R & CAN_RF0R_FMP0) != 0) {
     puts("CAN2 RX\n");
     uint16_t address = CAN2->sFIFOMailBox[0].RIR >> 21;
-    if(address == 0x38E | address == 0x38F | address == 0x391) {
-      uint64_t data; //sendESP_private2
-      uint8_t *dat = (uint8_t *)&data;
-      for (int i=0; i<8; i++) {
-        dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
-      }
-    }
     switch (address) {
     /*  case 0x391:
         uint8_t dat[5];
@@ -265,6 +258,11 @@ void CAN2_RX0_IRQ_Handler(void) {
         }
         break;*/
       case 0x38E: ;
+        uint64_t data; //sendESP_private2
+        uint8_t *dat = (uint8_t *)&data;
+        for (int i=0; i<8; i++) {
+          dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
+        }
         uint8_t index = dat[6] & COUNTER_CYCLE;
         if(dat[0] == lut_checksum(dat, 8, crc8_lut_1d)) {
           if (((can2_count_in_1 + 1U) & COUNTER_CYCLE) == index) {
@@ -281,12 +279,17 @@ void CAN2_RX0_IRQ_Handler(void) {
         }
         break;
       case 0x38F: ;
-        uint8_t index = dat[1] & COUNTER_CYCLE;
-        if(dat[0] == lut_checksum(dat, 8, crc8_lut_1d)) {
+        uint64_t data2; //sendESP_private2
+        uint8_t *dat2 = (uint8_t *)&data2;
+        for (int i=0; i<8; i++) {
+          dat2[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
+        }
+        uint8_t index = dat2[1] & COUNTER_CYCLE;
+        if(dat2[0] == lut_checksum(dat2, 8, crc8_lut_1d)) {
           if (((can2_count_in_3 + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
-            ibst_status = (data >> 19) & 0x7;
-            brake_applied = (dat[2] & 0x1) | !((dat[2] >> 1) & 0x1); //Sends brake applied if ibooster says brake applied or if there's a fault with the brake sensor, assumes worst case scenario
+            ibst_status = (data2 >> 19) & 0x7;
+            brake_applied = (dat2[2] & 0x1) | !((dat2[2] >> 1) & 0x1); //Sends brake applied if ibooster says brake applied or if there's a fault with the brake sensor, assumes worst case scenario
 
             can2_count_in_3++;
           }
