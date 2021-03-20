@@ -147,7 +147,7 @@ uint8_t state = FAULT_STARTUP;
 #define EXTFAULT1_SCE 4U
 #define EXTFAULT1_COUNTER1 5U
 #define EXTFAULT1_COUNTER2 6U
-#define EXTFAULT1_COUNTER2 7U
+#define EXTFAULT1_COUNTER3 7U
 #define EXTFAULT1_TIMEOUT 8U
 #define EXTFAULT1_SEND1 9U
 #define EXTFAULT1_SEND2 10U
@@ -185,12 +185,12 @@ void CAN1_RX0_IRQ_Handler(void) {
           }
         }
         break;
-      case 0x20E:
-        uint8_t dat[8];
+      case 0x20E: ;
+        uint64_t data; //sendESP_private2
+        uint8_t *dat = (uint8_t *)&data;
         for (int i=0; i<8; i++) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
-        uint64_t *data = (uint8_t *)&dat;
         uint8_t index = dat[1] & COUNTER_CYCLE;
         if(dat[0] == lut_checksum(dat, 8, crc8_lut_1d)) {
           if (((can1_count_in + 1U) & COUNTER_CYCLE) == index) {
@@ -207,7 +207,7 @@ void CAN1_RX0_IRQ_Handler(void) {
           state = FAULT_BAD_CHECKSUM;
         }
         break;
-      case 0x366:
+      case 0x366: ;
         uint8_t dat[4];
         for (int i=0; i<4; i++) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
@@ -257,15 +257,15 @@ void CAN2_RX0_IRQ_Handler(void) {
           state = EXTFAULT1_CHECKSUM1;
         }
         break;*/
-      case 0x38E:
-        uint8_t dat[8];
+      case 0x38E: ;
+        uint64_t data; //sendESP_private2
+        uint8_t *dat = (uint8_t *)&data;
         for (int i=0; i<8; i++) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
-        uint64_t *data = (uint8_t *)&dat;
         uint8_t index = dat[6] & COUNTER_CYCLE;
         if(dat[0] == lut_checksum(dat, 8, crc8_lut_1d)) {
-          if (((can2_count_in1 + 1U) & COUNTER_CYCLE) == index) {
+          if (((can2_count_in_1 + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
             output_rod_target = ((data >> 24) & 0x3FU);
             can2_count_in1++;
@@ -278,7 +278,7 @@ void CAN2_RX0_IRQ_Handler(void) {
           state = EXTFAULT1_CHECKSUM2;
         }
         break;
-      case 0x38F:
+      case 0x38F: ;
         uint64_t data; //sendESP_private2
         uint8_t *dat = (uint8_t *)&data;
         for (int i=0; i<8; i++) {
@@ -286,7 +286,7 @@ void CAN2_RX0_IRQ_Handler(void) {
         }
         uint8_t index = dat[1] & COUNTER_CYCLE;
         if(dat[0] == lut_checksum(dat, 8, crc8_lut_1d)) {
-          if (((can2_count_in3 + 1U) & COUNTER_CYCLE) == index) {
+          if (((can2_count_in_3 + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
             ibst_status = (data >> 19) & 0x7;
             brake_applied = (dat[2] & 0x1) & ((dat[2] >>) 1 & 0x1);
@@ -316,7 +316,7 @@ void CAN2_SCE_IRQ_Handler(void) {
 void CAN3_RX0_IRQ_Handler(void) {
   while ((CAN3->RF0R & CAN_RF0R_FMP0) != 0) {
     puts("CAN3 RX\n");
-    uint16_t address = CAN3->sFIFOMailBox[0].RIR >> 21;
+    //uint16_t address = CAN3->sFIFOMailBox[0].RIR >> 21;
 
     // next
     CAN3->RF0R |= CAN_RF0R_RFOM0;
@@ -347,7 +347,7 @@ void TIM3_IRQ_Handler(void) {
   // check timer for sending the user pedal and clearing the CAN
   if ((CAN2->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     uint8_t dat[8]; //sendESP_private3
-    uint16_t pTargetDriver = P_TARGET_DRIVER * 4
+    uint16_t pTargetDriver = P_TARGET_DRIVER * 4;
     dat[2] = pTargetDriver & 0xFFU;
     dat[3] = (pTargetDriver & 0x3U) >> 8;
     dat[4] = 0x0;
@@ -356,10 +356,10 @@ void TIM3_IRQ_Handler(void) {
     dat[7] = 0x0;
     dat[1] = can2_count_out_1;
     dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
-    CAN->sTxMailBox[0].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
-    CAN->sTxMailBox[0].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
-    CAN->sTxMailBox[0].TDTR = 8;  // len of packet is 5
-    CAN->sTxMailBox[0].TIR = (0x38D << 21) | 1U;
+    CAN2->sTxMailBox[0].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
+    CAN2->sTxMailBox[0].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
+    CAN2->sTxMailBox[0].TDTR = 8;  // len of packet is 5
+    CAN2->sTxMailBox[0].TIR = (0x38D << 21) | 1U;
 
   }
   else {
@@ -396,13 +396,13 @@ void TIM3_IRQ_Handler(void) {
   }
   if (((CAN2->TSR & CAN_TSR_TME2) == CAN_TSR_TME2) & sent) {
     uint64_t data; //sendESP_private2
-    uint8_t *da = (uint8_t *)&data;
+    uint8_t *dat = (uint8_t *)&data;
 
     data = P_EST_MAX << 16;
     data |= P_EST_MAX_QF << 24;
     data |= ((((uint32_t) current_speed*16)/9)& 0x3FFF) << 24;
-    data |= VEHICLE_QF << 40;
-    data |= IGNITION_ON << 43;
+    data |= (uint64_t) VEHICLE_QF << 40;
+    data |= (uint64_t) IGNITION_ON << 43;
 
     dat[1] = can2_count_out_2;
     dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
@@ -448,8 +448,6 @@ void TIM3_IRQ_Handler(void) {
     #endif
   }
   // blink the LED
-  current_board->set_led(LED_GREEN, led_value);
-  led_value = !led_value;
 
   TIM3->SR = 0;
 
@@ -463,7 +461,7 @@ void TIM3_IRQ_Handler(void) {
 
 // ***************************** main code *****************************
 
-void pedal(void) {
+void ibst(void) {
   // read/write
 
 
