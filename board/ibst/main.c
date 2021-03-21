@@ -15,6 +15,7 @@
 
 #include "drivers/clock.h"
 #include "drivers/timer.h"
+#include "drivers/adc.h"
 
 #include "gpio.h"
 #include "crc.h"
@@ -284,9 +285,9 @@ void CAN2_RX0_IRQ_Handler(void) {
         for (int i=0; i<8; i++) {
           dat2[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
-        uint8_t index = dat2[1] & COUNTER_CYCLE;
+        uint8_t index2 = dat2[1] & COUNTER_CYCLE;
         if(dat2[0] == lut_checksum(dat2, 8, crc8_lut_1d)) {
-          if (((can2_count_in_3 + 1U) & COUNTER_CYCLE) == index) {
+          if (((can2_count_in_3 + 1U) & COUNTER_CYCLE) == index2) {
             //if counter and checksum valid accept commands
             ibst_status = (data2 >> 19) & 0x7;
             brake_applied = (dat2[2] & 0x1) | !((dat2[2] >> 1) & 0x1); //Sends brake applied if ibooster says brake applied or if there's a fault with the brake sensor, assumes worst case scenario
