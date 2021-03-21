@@ -375,8 +375,8 @@ void TIM3_IRQ_Handler(void) {
     uint8_t *dat = (uint8_t *)&data;
 
     data = (uint64_t) ((p_limit_external & 0x1FF) << 16);
-    data |= (q_target_ext << 28);
-    data |= (uint64_t)(q_target_ext_qf << 44);
+    data |= (uint64_t) (q_target_ext << 28);
+    data |= (uint64_t) (q_target_ext_qf << 44);
 
     dat[1] = can2_count_out_1;
     dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
