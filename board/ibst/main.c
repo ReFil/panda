@@ -429,9 +429,10 @@ void TIM3_IRQ_Handler(void) {
   if ((CAN1->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     uint8_t dat[5];
     brake_ok = (ibst_status && 0x7);
-    dat[2] = brake_ok | brake_applied << 1;
-    dat[3] = output_rod_target & 0xFF;
-    dat[4] = ((output_rod_target & 0x00) >> 8);
+    uint16_t shftpedpos = (output_rod_target << 2);
+    dat[2] = brake_ok | brake_applied << 1 | (shftpedpos & 0xFC);
+    dat[3] = ((output_rod_target & 0x00) >> 8);
+    dat[4] = (can2state & 0xFU) << 4;
 
     dat[1] = ((state & 0xFU) << 4) | can1_count_out;
     dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
