@@ -441,7 +441,7 @@ void TIM3_IRQ_Handler(void) {
     CAN1->sTxMailBox[0].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
     CAN1->sTxMailBox[0].TDHR = dat[4];
     CAN1->sTxMailBox[0].TDTR = 5;  // len of packet is 5
-    CAN1->sTxMailBox[0].TIR = (0x38D << 21) | 1U;
+    CAN1->sTxMailBox[0].TIR = (0x20F << 21) | 1U;
     can1_count_out++;
     can1_count_out &= COUNTER_CYCLE;
   }
