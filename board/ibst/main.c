@@ -273,11 +273,11 @@ void CAN2_RX0_IRQ_Handler(void) {
             can2_count_in_1++;
           }
           else {
-            state = EXTFAULT1_COUNTER2;
+            can2state = EXTFAULT1_COUNTER2;
           }
         }
         else {
-          state = EXTFAULT1_CHECKSUM2;
+          can2state = EXTFAULT1_CHECKSUM2;
         }
         break;
       case 0x38F: ;
@@ -296,11 +296,11 @@ void CAN2_RX0_IRQ_Handler(void) {
             can2_count_in_3++;
           }
           else {
-            state = EXTFAULT1_COUNTER3;
+            can2state = EXTFAULT1_COUNTER3;
           }
         }
         else {
-          state = EXTFAULT1_CHECKSUM3;
+          can2state = EXTFAULT1_CHECKSUM3;
         }
         break;
       default: ;
