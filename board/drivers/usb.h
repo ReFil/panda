@@ -1005,10 +1005,12 @@ void usb_init(void) {
   USBx->GCCFG = USB_OTG_GCCFG_PWRDWN;
 
   //USBx->GCCFG |= USB_OTG_GCCFG_VBDEN | USB_OTG_GCCFG_SDEN |USB_OTG_GCCFG_PDEN | USB_OTG_GCCFG_DCDEN;
-
+#ifdef PANDA
   /* B-peripheral session valid override enable*/
   USBx->GOTGCTL |= USB_OTG_GOTGCTL_BVALOVAL;
   USBx->GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN;
+#endif
+
 #else
   USBx->GCCFG = USB_OTG_GCCFG_PWRDWN | USB_OTG_GCCFG_NOVBUSSENS;
 #endif
