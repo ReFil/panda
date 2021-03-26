@@ -263,7 +263,7 @@ void CAN2_RX0_IRQ_Handler(void) {
         uint64_t data; //sendESP_private2
         uint8_t *dat = (uint8_t *)&data;
         for (int i=0; i<8; i++) {
-          dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
+          dat[i] = GET_BYTE(&CAN2->sFIFOMailBox[0], i);
         }
         uint8_t index = dat[6] & COUNTER_CYCLE;
         if(dat[0] == lut_checksum(dat, 8, crc8_lut_1d)) {
@@ -284,7 +284,7 @@ void CAN2_RX0_IRQ_Handler(void) {
         uint64_t data2; //sendESP_private2
         uint8_t *dat2 = (uint8_t *)&data2;
         for (int i=0; i<8; i++) {
-          dat2[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
+          dat2[i] = GET_BYTE(&CAN2->sFIFOMailBox[0], i);
         }
         uint8_t index2 = dat2[1] & COUNTER_CYCLE;
         if(dat2[0] == lut_checksum(dat2, 8, crc8_lut_1d)) {
