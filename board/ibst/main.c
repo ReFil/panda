@@ -343,6 +343,8 @@ bool sent;
 #define P_TARGET_DRIVER 0
 #define P_TARGET_DRIVER_QF 0
 #define ABS_ACTIVE 0
+#define P_MC 0
+#define P_MC_QF 1
 
 
 void TIM3_IRQ_Handler(void) {
@@ -354,7 +356,7 @@ void TIM3_IRQ_Handler(void) {
     dat[3] = (pTargetDriver & 0x3U) >> 8;
     dat[4] = 0x0;
     dat[5] = 0x0;
-    dat[6] = 0x0;
+    dat[6] = (uint8_t) P_MC_QF >> 5;
     dat[7] = 0x0;
     dat[1] = can2_count_out_1;
     dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
@@ -397,7 +399,7 @@ void TIM3_IRQ_Handler(void) {
     #endif
   }
   if (((CAN2->TSR & CAN_TSR_TME2) == CAN_TSR_TME2) & sent) {
-    uint64_t data; //sendESP_private2
+    uint64_t data; //sendESP_private1 every 20ms
     uint8_t *dat = (uint8_t *)&data;
 
     data = P_EST_MAX << 16;
