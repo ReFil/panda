@@ -24,6 +24,8 @@
 #include "drivers/uart.h"
 #include "drivers/usb.h"
 
+// uncomment for usb debugging via debug_console.py
+// #define IBST_DEBUG
 
 #define ENTER_BOOTLOADER_MAGIC 0xdeadbeef
 uint32_t enter_bootloader_mode;
@@ -501,6 +503,10 @@ int main(void) {
   // init board
   current_board->init();
   // enable USB
+  #ifdef IBST_DEBUG
+  USBx->GOTGCTL |= USB_OTG_GOTGCTL_BVALOVAL;
+  USBx->GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN;
+  #endif
   usb_init();
 
   // init can
