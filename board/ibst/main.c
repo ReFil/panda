@@ -173,7 +173,9 @@ uint8_t crc8_lut_1d[256];
 
 void CAN1_RX0_IRQ_Handler(void) {
   while ((CAN1->RF0R & CAN_RF0R_FMP0) != 0) {
+    #ifdef IBST_DEBUG
     puts("CAN1 RX\n");
+    #endif
     uint16_t address = CAN1->sFIFOMailBox[0].RIR >> 21;
     switch (address) {
       case CAN_UPDATE:
@@ -236,7 +238,9 @@ void CAN1_SCE_IRQ_Handler(void) {
 
 void CAN2_RX0_IRQ_Handler(void) {
   while ((CAN2->RF0R & CAN_RF0R_FMP0) != 0) {
+    #ifdef IBST_DEBUG
     puts("CAN2 RX\n");
+    #endif
     uint16_t address = CAN2->sFIFOMailBox[0].RIR >> 21;
     switch (address) {
     /*  case 0x391:
@@ -319,7 +323,9 @@ void CAN2_SCE_IRQ_Handler(void) {
 
 void CAN3_RX0_IRQ_Handler(void) {
   while ((CAN3->RF0R & CAN_RF0R_FMP0) != 0) {
+    #ifdef IBST_DEBUG
     puts("CAN3 RX\n");
+    #endif
     //uint16_t address = CAN3->sFIFOMailBox[0].RIR >> 21;
 
     // next
@@ -371,7 +377,7 @@ void TIM3_IRQ_Handler(void) {
   else {
     // old can packet hasn't sent!
     state = EXTFAULT1_SEND1;
-    #ifdef DEBUG
+    #ifdef IBST_DEBUG
       puts("CAN2 MISS1\n");
     #endif
   }
@@ -396,7 +402,7 @@ void TIM3_IRQ_Handler(void) {
   else {
     // old can packet hasn't sent!
     state = EXTFAULT1_SEND2;
-    #ifdef DEBUG
+    #ifdef IBST_DEBUG
       puts("CAN2 MISS2\n");
     #endif
   }
@@ -422,7 +428,7 @@ void TIM3_IRQ_Handler(void) {
   else {
     // old can packet hasn't sent!
     state = EXTFAULT1_SEND3;
-    #ifdef DEBUG
+    #ifdef IBST_DEBUG
       puts("CAN2 MISS3\n");
     #endif
   }
@@ -450,7 +456,7 @@ void TIM3_IRQ_Handler(void) {
   else {
     // old can packet hasn't sent!
     state = FAULT_SEND;
-    #ifdef DEBUG
+    #ifdef IBST_DEBUG
       puts("CAN2 MISS1\n");
     #endif
   }
