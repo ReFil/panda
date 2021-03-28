@@ -386,7 +386,7 @@ void TIM3_IRQ_Handler(void) {
     uint16_t p_limit_external = P_LIMIT_EXTERNAL * 2;
     uint8_t *dat = (uint8_t *)&data;
 
-    data = (uint64_t) (p_limit_external & 0x1FF) << 16;
+    data = (uint64_t) (p_limit_external & 0x3FFU) << 16;
     data |= (uint64_t) q_target_ext << 28;
     data |= (uint64_t) q_target_ext_qf << 44;
 
@@ -457,7 +457,7 @@ void TIM3_IRQ_Handler(void) {
     // old can packet hasn't sent!
     state = FAULT_SEND;
     #ifdef IBST_DEBUG
-      puts("CAN2 MISS1\n");
+      puts("CAN1 MISS1\n");
     #endif
   }
   // blink the LED
