@@ -25,7 +25,7 @@
 #include "drivers/usb.h"
 
 // uncomment for usb debugging via debug_console.py
-// #define IBST_DEBUG
+#define IBST_DEBUG
 
 #define ENTER_BOOTLOADER_MAGIC 0xdeadbeef
 uint32_t enter_bootloader_mode;
@@ -202,7 +202,7 @@ void CAN1_RX0_IRQ_Handler(void) {
           if (((can1_count_in + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
             q_target_ext = (data >> 14);
-            q_target_ext_qf = (data >> 12);
+            q_target_ext_qf = (data >> 12) & !brake_applied & (state == NO_FAULT);
             can1_count_in++;
           }
           else {
@@ -393,8 +393,8 @@ void TIM3_IRQ_Handler(void) {
     dat[1] = can2_count_out_1;
     dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
     CAN2->sTxMailBox[1].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
-    CAN2->sTxMailBox[1].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16);
-    CAN2->sTxMailBox[1].TDTR = 7;  // len of packet is 5
+    CAN2->sTxMailBox[1].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
+    CAN2->sTxMailBox[1].TDTR = 8;  // len of packet is 5
     CAN2->sTxMailBox[1].TIR = (0x38C << 21) | 1U;
     can2_count_out_1++;
     can2_count_out_1 &= COUNTER_CYCLE;
