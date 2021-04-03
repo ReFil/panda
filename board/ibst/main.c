@@ -266,16 +266,15 @@ void CAN2_RX0_IRQ_Handler(void) {
         }
         break;*/
       case 0x38E: ;
-        uint64_t data; //sendESP_private2
-        uint8_t *dat = (uint8_t *)&data;
+        uint8_t dat[8]; //sendESP_private2
         for (int i=0; i<8; i++) {
           dat[i] = GET_BYTE(&CAN2->sFIFOMailBox[0], i);
         }
-        uint8_t index = dat[6] & COUNTER_CYCLE;
+        uint8_t index = dat[1] & COUNTER_CYCLE;
         if(dat[0] == lut_checksum(dat, 8, crc8_lut_1d)) {
           if (((can2_count_in_1 + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
-            output_rod_target = ((data >> 24) & 0x3FU);
+            output_rod_target = ((dat[4] & 0xFU) << 8U) | dat[3];
             can2_count_in_1++;
           }
           else {
@@ -288,7 +287,7 @@ void CAN2_RX0_IRQ_Handler(void) {
         break;
       case 0x38F: ;
         uint64_t data2; //sendESP_private2
-        uint8_t *dat2 = (uint8_t *)&data2;
+        uint8_t dat2[8]
         for (int i=0; i<8; i++) {
           dat2[i] = GET_BYTE(&CAN2->sFIFOMailBox[0], i);
         }
@@ -406,31 +405,33 @@ void TIM3_IRQ_Handler(void) {
       puts("CAN2 MISS2\n");
     #endif
   }
-  if (((CAN2->TSR & CAN_TSR_TME2) == CAN_TSR_TME2) & sent) {
-    uint64_t data; //sendESP_private1 every 20ms
-    uint8_t *dat = (uint8_t *)&data;
+  if (!sent){ 
+    if ((CAN2->TSR & CAN_TSR_TME2) == CAN_TSR_TME2) {
+      uint64_t data; //sendESP_private1 every 20ms
+      uint8_t *dat = (uint8_t *)&data;
 
-    data = P_EST_MAX << 16;
-    data |= P_EST_MAX_QF << 24;
-    data |= ((((uint32_t) current_speed*16)/9)& 0x3FFF) << 24;
-    data |= (uint64_t) VEHICLE_QF << 40;
-    data |= (uint64_t) IGNITION_ON << 43;
+      data = P_EST_MAX << 16;
+      data |= P_EST_MAX_QF << 24;
+      data |= ((((uint32_t) current_speed*16)/9)& 0x3FFF) << 24;
+      data |= (uint64_t) VEHICLE_QF << 40;
+      data |= (uint64_t) IGNITION_ON << 43;
 
-    dat[1] = can2_count_out_2;
-    dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
-    CAN2->sTxMailBox[2].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
-    CAN2->sTxMailBox[2].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
-    CAN2->sTxMailBox[2].TDTR = 8;  // len of packet is 5
-    CAN2->sTxMailBox[2].TIR = (0x38B << 21) | 1U;
-    can2_count_out_2++;
-    can2_count_out_2 &= COUNTER_CYCLE;
-  }
-  else {
-    // old can packet hasn't sent!
-    state = EXTFAULT1_SEND3;
-    #ifdef IBST_DEBUG
-      puts("CAN2 MISS3\n");
-    #endif
+      dat[1] = can2_count_out_2;
+      dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
+      CAN2->sTxMailBox[2].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
+      CAN2->sTxMailBox[2].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
+      CAN2->sTxMailBox[2].TDTR = 8;  // len of packet is 5
+      CAN2->sTxMailBox[2].TIR = (0x38B << 21) | 1U;
+      can2_count_out_2++;
+      can2_count_out_2 &= COUNTER_CYCLE;
+    }
+    else {
+      // old can packet hasn't sent!
+      state = EXTFAULT1_SEND3;
+      #ifdef IBST_DEBUG
+        puts("CAN2 MISS3\n");
+      #endif
+    }
   }
   sent = !sent;
 
@@ -439,9 +440,8 @@ void TIM3_IRQ_Handler(void) {
   if ((CAN1->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     uint8_t dat[5];
     brake_ok = (ibst_status && 0x7);
-    uint16_t shftpedpos = (output_rod_target << 2);
-    dat[2] = brake_ok | brake_applied << 1 | (shftpedpos & 0xFC);
-    dat[3] = ((output_rod_target & 0x00) >> 8);
+    dat[2] = brake_ok | brake_applied << 1U | (output_rod_target & 0x3FU) << 2U;
+    dat[3] = (output_rod_target >> 6U) & 0x3FU;
     dat[4] = (can2state & 0xFU) << 4;
 
     dat[1] = ((state & 0xFU) << 4) | can1_count_out;
