@@ -287,7 +287,7 @@ void CAN2_RX0_IRQ_Handler(void) {
         break;
       case 0x38F: ;
         uint64_t data2; //sendESP_private2
-        uint8_t dat2[8]
+        uint8_t *dat2 = (uint8_t *)&data2;
         for (int i=0; i<8; i++) {
           dat2[i] = GET_BYTE(&CAN2->sFIFOMailBox[0], i);
         }
@@ -381,20 +381,23 @@ void TIM3_IRQ_Handler(void) {
     #endif
   }
   if ((CAN2->TSR & CAN_TSR_TME1) == CAN_TSR_TME1) {
-    uint64_t data; //sendESP_private2
+    uint8_t dat[8]; //sendESP_private2
     uint16_t p_limit_external = P_LIMIT_EXTERNAL * 2;
-    uint8_t *dat = (uint8_t *)&data;
 
-    data = (uint64_t) (p_limit_external & 0x3FFU) << 16;
-    data |= (uint64_t) q_target_ext << 28;
-    data |= (uint64_t) q_target_ext_qf << 44;
-
-    dat[1] = can2_count_out_1;
     dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
+    dat[1] = can2_count_out_1 & COUNTER_CYCLE;
+    dat[2] = p_limit_external & 0xFF;
+    dat[3] = ((p_limit_external >> 8U) & 0x1U) | (q_target_ext & 0xFU) << 4U;
+    dat[4] = (q_target_ext >> 4U) & 0xFF;
+    dat[5] = ((q_target_ext >> 12U) & 0xFU) | (q_target_ext_qf << 4U); // what is ESP_diagnosticESP?
+    dat[6] = 0x00;
+    dat[7] = 0x00;
+
     CAN2->sTxMailBox[1].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
     CAN2->sTxMailBox[1].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
     CAN2->sTxMailBox[1].TDTR = 8;  // len of packet is 5
     CAN2->sTxMailBox[1].TIR = (0x38C << 21) | 1U;
+
     can2_count_out_1++;
     can2_count_out_1 &= COUNTER_CYCLE;
   }
@@ -407,17 +410,27 @@ void TIM3_IRQ_Handler(void) {
   }
   if (!sent){ 
     if ((CAN2->TSR & CAN_TSR_TME2) == CAN_TSR_TME2) {
-      uint64_t data; //sendESP_private1 every 20ms
-      uint8_t *dat = (uint8_t *)&data;
+      // uint64_t data; //sendESP_private1 every 20ms
+      // uint8_t *dat = (uint8_t *)&data;
 
-      data = P_EST_MAX << 16;
-      data |= P_EST_MAX_QF << 24;
-      data |= ((((uint32_t) current_speed*16)/9)& 0x3FFF) << 24;
-      data |= (uint64_t) VEHICLE_QF << 40;
-      data |= (uint64_t) IGNITION_ON << 43;
+      // data = P_EST_MAX << 16;
+      // data |= P_EST_MAX_QF << 24;
+      // data |= ((((uint32_t) current_speed*16)/9)& 0x3FFF) << 24;
+      // data |= (uint64_t) VEHICLE_QF << 40;
+      // data |= (uint64_t) IGNITION_ON << 43;
+      
+      uint8_t dat[8];
+      uint16_t ESP_vehicleSpeed = (((current_speed*16) / 9) & 0x3FFF);
 
-      dat[1] = can2_count_out_2;
       dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
+      dat[1] = can2_count_out_2 & COUNTER_CYCLE;
+      dat[2] = P_EST_MAX;
+      dat[3] = P_EST_MAX_QF | (ESP_vehicleSpeed & 0x3FU);
+      dat[4] = (ESP_vehicleSpeed >> 6U) & 0xFF;
+      dat[5] = VEHICLE_QF | (IGNITION_ON << 3U);
+      dat[6] = 0x00;
+      dat[7] = 0x00;
+
       CAN2->sTxMailBox[2].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
       CAN2->sTxMailBox[2].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
       CAN2->sTxMailBox[2].TDTR = 8;  // len of packet is 5
