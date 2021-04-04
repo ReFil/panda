@@ -50,6 +50,8 @@ void __initialize_hardware_early(void) {
 
 #ifdef IBST_USB
 
+#include "ibst/can.h"
+
 // ********************* usb debugging *********************
 void debug_ring_callback(uart_ring *ring) {
   char rcv;
@@ -59,23 +61,57 @@ void debug_ring_callback(uart_ring *ring) {
 }
 
 int usb_cb_ep1_in(void *usbdata, int len, bool hardwired) {
-  UNUSED(usbdata);
-  UNUSED(len);
   UNUSED(hardwired);
-  return 0;
+  CAN_FIFOMailBox_TypeDef *reply = (CAN_FIFOMailBox_TypeDef *)usbdata;
+  int ilen = 0;
+  while (ilen < MIN(len/0x10, 4) && can_pop(&can_rx_q, &reply[ilen])) {
+    ilen++;
+  }
+  return ilen*0x10;
 }
+// send on serial, first byte to select the ring
 void usb_cb_ep2_out(void *usbdata, int len, bool hardwired) {
-  UNUSED(usbdata);
-  UNUSED(len);
   UNUSED(hardwired);
+  uint8_t *usbdata8 = (uint8_t *)usbdata;
+  uart_ring *ur = get_ring_by_number(usbdata8[0]);
+  if ((len != 0) && (ur != NULL)) {
+    if ((usbdata8[0] < 2U)) {
+      for (int i = 1; i < len; i++) {
+        while (!putc(ur, usbdata8[i])) {
+          // wait
+        }
+      }
+    }
+  }
 }
+// send on CAN
 void usb_cb_ep3_out(void *usbdata, int len, bool hardwired) {
   UNUSED(usbdata);
   UNUSED(len);
   UNUSED(hardwired);
+  // int dpkt = 0;
+  // uint32_t *d32 = (uint32_t *)usbdata;
+  // for (dpkt = 0; dpkt < (len / 4); dpkt += 4) {
+  //   CAN_FIFOMailBox_TypeDef to_push;
+  //   to_push.RDHR = d32[dpkt + 3];
+  //   to_push.RDLR = d32[dpkt + 2];
+  //   to_push.RDTR = d32[dpkt + 1];
+  //   to_push.RIR = d32[dpkt];
+
+  //   uint8_t bus_number = (to_push.RDTR >> 4) & CAN_BUS_NUM_MASK;
+  //   can_send(&to_push, bus_number, false);
+  // }
 }
-void usb_cb_ep3_out_complete(void) {}
-void usb_cb_enumeration_complete(void) {}
+void usb_cb_ep3_out_complete() {
+  if (can_tx_check_min_slots_free(MAX_CAN_MSGS_PER_BULK_TRANSFER)) {
+    usb_outep3_resume_if_paused();
+  }
+}
+
+void usb_cb_enumeration_complete() {
+  puts("USB enumeration complete\n");
+  is_enumerated = 1;
+}
 
 int usb_cb_control_msg(USB_Setup_TypeDef *setup, uint8_t *resp, bool hardwired) {
   UNUSED(hardwired);
@@ -107,6 +143,10 @@ int usb_cb_control_msg(USB_Setup_TypeDef *setup, uint8_t *resp, bool hardwired) 
           break;
       }
       break;
+    // **** 0xd8: reset ST
+    case 0xd8:
+      NVIC_SystemReset();
+      break;
     // **** 0xe0: uart read
     case 0xe0:
       ur = get_ring_by_number(setup->b.wValue.w);
@@ -119,6 +159,28 @@ int usb_cb_control_msg(USB_Setup_TypeDef *setup, uint8_t *resp, bool hardwired) 
         ++resp_len;
       }
       break;
+    // **** 0xf1: Clear CAN ring buffer.
+    case 0xf1:
+      if (setup->b.wValue.w == 0xFFFFU) {
+        puts("Clearing CAN Rx queue\n");
+        can_clear(&can_rx_q);
+      } else if (setup->b.wValue.w < BUS_MAX) {
+        puts("Clearing CAN Tx queue\n");
+        can_clear(can_queues[setup->b.wValue.w]);
+      } else {
+        puts("Clearing CAN CAN ring buffer failed: wrong bus number\n");
+      }
+      break;
+    // **** 0xf2: Clear UART ring buffer.
+    case 0xf2:
+      {
+        uart_ring * rb = get_ring_by_number(setup->b.wValue.w);
+        if (rb != NULL) {
+          puts("Clearing UART queue.\n");
+          clear_uart_buff(rb);
+        }
+        break;
+      }
     default:
       puts("NO HANDLER ");
       puth(setup->b.bRequest);
@@ -135,18 +197,15 @@ int usb_cb_control_msg(USB_Setup_TypeDef *setup, uint8_t *resp, bool hardwired) 
 #define COUNTER_CYCLE 0xFU
 
 void CAN1_TX_IRQ_Handler(void) {
-  // clear interrupt
-  CAN1->TSR |= CAN_TSR_RQCP0;
+  process_can(0);
 }
 
 void CAN2_TX_IRQ_Handler(void) {
-  // clear interrupt
-  CAN2->TSR |= CAN_TSR_RQCP0;
+  process_can(1);
 }
 
 void CAN3_TX_IRQ_Handler(void) {
-  // clear interrupt
-  CAN3->TSR |= CAN_TSR_RQCP0;
+  process_can(2);
 }
 
 // two independent values
@@ -267,6 +326,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         }
       default: ;
     }
+    can_rx(0);
     // next
     CAN1->RF0R |= CAN_RF0R_RFOM0;
   }
@@ -274,6 +334,7 @@ void CAN1_RX0_IRQ_Handler(void) {
 
 void CAN1_SCE_IRQ_Handler(void) {
   state = FAULT_SCE;
+  can_sce(CAN1);
   llcan_clear_send(CAN1);
 }
 
@@ -352,12 +413,14 @@ void CAN2_RX0_IRQ_Handler(void) {
       default: ;
     }
     // next
+    can_rx(1);
     CAN2->RF0R |= CAN_RF0R_RFOM0;
   }
 }
 
 void CAN2_SCE_IRQ_Handler(void) {
   state = FAULT_SCE;
+  can_sce(CAN2);
   llcan_clear_send(CAN2);
 }
 
@@ -369,12 +432,14 @@ void CAN3_RX0_IRQ_Handler(void) {
     //uint16_t address = CAN3->sFIFOMailBox[0].RIR >> 21;
 
     // next
+    can_rx(2);
     CAN3->RF0R |= CAN_RF0R_RFOM0;
   }
 }
 
 void CAN3_SCE_IRQ_Handler(void) {
   state = FAULT_SCE;
+  can_sce(CAN3);
   llcan_clear_send(CAN3);
 }
 
@@ -412,7 +477,7 @@ void TIM3_IRQ_Handler(void) {
     CAN2->sTxMailBox[0].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
     CAN2->sTxMailBox[0].TDTR = 8;  // len of packet is 5
     CAN2->sTxMailBox[0].TIR = (0x38D << 21) | 1U;
-
+    process_can(1);
   }
   else {
     // old can packet hasn't sent!
@@ -441,6 +506,7 @@ void TIM3_IRQ_Handler(void) {
 
     can2_count_out_1++;
     can2_count_out_1 &= COUNTER_CYCLE;
+    process_can(1);
   }
   else {
     // old can packet hasn't sent!
@@ -478,6 +544,7 @@ void TIM3_IRQ_Handler(void) {
       CAN2->sTxMailBox[2].TIR = (0x38B << 21) | 1U;
       can2_count_out_2++;
       can2_count_out_2 &= COUNTER_CYCLE;
+      process_can(1);
     }
     else {
       // old can packet hasn't sent!
@@ -506,6 +573,7 @@ void TIM3_IRQ_Handler(void) {
     CAN1->sTxMailBox[0].TIR = (0x20F << 21) | 1U;
     can1_count_out++;
     can1_count_out &= COUNTER_CYCLE;
+    process_can(0);
   }
   else {
     // old can packet hasn't sent!
