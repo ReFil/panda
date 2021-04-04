@@ -17,15 +17,28 @@
 #include "drivers/clock.h"
 #include "drivers/timer.h"
 
-
 #include "gpio.h"
 #include "crc.h"
 
-#include "drivers/uart.h"
-#include "drivers/usb.h"
-
 // uncomment for usb debugging via debug_console.py
-#define IBST_DEBUG
+#define IBST_USB
+#define DEBUG
+
+#ifdef IBST_USB
+  #include "drivers/uart.h"
+  #include "drivers/usb.h"
+#else
+  // no serial either
+  void puts(const char *a) {
+    UNUSED(a);
+  }
+  void puth(unsigned int i) {
+    UNUSED(i);
+  }
+  void puth2(unsigned int i) {
+    UNUSED(i);
+  }
+#endif
 
 #define ENTER_BOOTLOADER_MAGIC 0xdeadbeef
 uint32_t enter_bootloader_mode;
@@ -34,6 +47,8 @@ uint32_t enter_bootloader_mode;
 void __initialize_hardware_early(void) {
   early();
 }
+
+#ifdef IBST_USB
 
 // ********************* usb debugging *********************
 void debug_ring_callback(uart_ring *ring) {
@@ -67,6 +82,31 @@ int usb_cb_control_msg(USB_Setup_TypeDef *setup, uint8_t *resp, bool hardwired) 
   unsigned int resp_len = 0;
   uart_ring *ur = NULL;
   switch (setup->b.bRequest) {
+    // **** 0xd1: enter bootloader mode
+    case 0xd1:
+      // this allows reflashing of the bootstub
+      // so it's blocked over wifi
+      switch (setup->b.wValue.w) {
+        case 0:
+          // only allow bootloader entry on debug builds
+          #ifdef ALLOW_DEBUG
+            if (hardwired) {
+              puts("-> entering bootloader\n");
+              enter_bootloader_mode = ENTER_BOOTLOADER_MAGIC;
+              NVIC_SystemReset();
+            }
+          #endif
+          break;
+        case 1:
+          puts("-> entering softloader\n");
+          enter_bootloader_mode = ENTER_SOFTLOADER_MAGIC;
+          NVIC_SystemReset();
+          break;
+        default:
+          puts("Bootloader mode invalid\n");
+          break;
+      }
+      break;
     // **** 0xe0: uart read
     case 0xe0:
       ur = get_ring_by_number(setup->b.wValue.w);
@@ -88,6 +128,7 @@ int usb_cb_control_msg(USB_Setup_TypeDef *setup, uint8_t *resp, bool hardwired) 
   return resp_len;
 }
 
+#endif
 
 // ***************************** can port *****************************
 #define CAN_UPDATE  0x341 //bootloader
@@ -173,7 +214,7 @@ uint8_t crc8_lut_1d[256];
 
 void CAN1_RX0_IRQ_Handler(void) {
   while ((CAN1->RF0R & CAN_RF0R_FMP0) != 0) {
-    #ifdef IBST_DEBUG
+    #ifdef DEBUG
     puts("CAN1 RX\n");
     #endif
     uint16_t address = CAN1->sFIFOMailBox[0].RIR >> 21;
@@ -238,7 +279,7 @@ void CAN1_SCE_IRQ_Handler(void) {
 
 void CAN2_RX0_IRQ_Handler(void) {
   while ((CAN2->RF0R & CAN_RF0R_FMP0) != 0) {
-    #ifdef IBST_DEBUG
+    #ifdef DEBUG
     puts("CAN2 RX\n");
     #endif
     uint16_t address = CAN2->sFIFOMailBox[0].RIR >> 21;
@@ -322,7 +363,7 @@ void CAN2_SCE_IRQ_Handler(void) {
 
 void CAN3_RX0_IRQ_Handler(void) {
   while ((CAN3->RF0R & CAN_RF0R_FMP0) != 0) {
-    #ifdef IBST_DEBUG
+    #ifdef DEBUG
     puts("CAN3 RX\n");
     #endif
     //uint16_t address = CAN3->sFIFOMailBox[0].RIR >> 21;
@@ -376,7 +417,7 @@ void TIM3_IRQ_Handler(void) {
   else {
     // old can packet hasn't sent!
     state = EXTFAULT1_SEND1;
-    #ifdef IBST_DEBUG
+    #ifdef DEBUG
       puts("CAN2 MISS1\n");
     #endif
   }
@@ -404,7 +445,7 @@ void TIM3_IRQ_Handler(void) {
   else {
     // old can packet hasn't sent!
     state = EXTFAULT1_SEND2;
-    #ifdef IBST_DEBUG
+    #ifdef DEBUG
       puts("CAN2 MISS2\n");
     #endif
   }
@@ -441,7 +482,7 @@ void TIM3_IRQ_Handler(void) {
     else {
       // old can packet hasn't sent!
       state = EXTFAULT1_SEND3;
-      #ifdef IBST_DEBUG
+      #ifdef DEBUG
         puts("CAN2 MISS3\n");
       #endif
     }
@@ -469,7 +510,7 @@ void TIM3_IRQ_Handler(void) {
   else {
     // old can packet hasn't sent!
     state = FAULT_SEND;
-    #ifdef IBST_DEBUG
+    #ifdef DEBUG
       puts("CAN1 MISS1\n");
     #endif
   }
@@ -489,8 +530,6 @@ void TIM3_IRQ_Handler(void) {
 
 void ibst(void) {
   // read/write
-
-
   watchdog_feed();
 }
 
@@ -522,11 +561,11 @@ int main(void) {
   // init board
   current_board->init();
   // enable USB
-  #ifdef IBST_DEBUG
+  #ifdef IBST_USB
   USBx->GOTGCTL |= USB_OTG_GOTGCTL_BVALOVAL;
   USBx->GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN;
-  #endif
   usb_init();
+  #endif
 
   // init can
   bool llcan_speed_set = llcan_set_speed(CAN1, 5000, false, false);
