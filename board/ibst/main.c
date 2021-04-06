@@ -462,7 +462,7 @@ void TIM3_IRQ_Handler(void) {
     dat[3] = (pTargetDriver & 0x3U) >> 8;
     dat[4] = 0x0;
     dat[5] = 0x0;
-    dat[6] = (uint8_t) P_MC_QF >> 5;
+    dat[6] = (uint8_t) P_MC_QF << 5;
     dat[7] = 0x0;
     dat[1] = can2_count_out_1;
     dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
