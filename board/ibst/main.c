@@ -89,18 +89,6 @@ void usb_cb_ep3_out(void *usbdata, int len, bool hardwired) {
   UNUSED(usbdata);
   UNUSED(len);
   UNUSED(hardwired);
-  // int dpkt = 0;
-  // uint32_t *d32 = (uint32_t *)usbdata;
-  // for (dpkt = 0; dpkt < (len / 4); dpkt += 4) {
-  //   CAN_FIFOMailBox_TypeDef to_push;
-  //   to_push.RDHR = d32[dpkt + 3];
-  //   to_push.RDLR = d32[dpkt + 2];
-  //   to_push.RDTR = d32[dpkt + 1];
-  //   to_push.RIR = d32[dpkt];
-
-  //   uint8_t bus_number = (to_push.RDTR >> 4) & CAN_BUS_NUM_MASK;
-  //   can_send(&to_push, bus_number, false);
-  // }
 }
 void usb_cb_ep3_out_complete() {
   if (can_tx_check_min_slots_free(MAX_CAN_MSGS_PER_BULK_TRANSFER)) {
@@ -201,6 +189,7 @@ void CAN1_TX_IRQ_Handler(void) {
 }
 
 void CAN2_TX_IRQ_Handler(void) {
+  // CAN2->TSR |= CAN_TSR_RQCP0;
   process_can(1);
 }
 
@@ -208,7 +197,6 @@ void CAN3_TX_IRQ_Handler(void) {
   process_can(2);
 }
 
-// two independent values
 uint8_t current_speed = 0;
 uint16_t q_target_ext = 0;
 bool q_target_ext_qf = 0;
@@ -220,7 +208,6 @@ bool brake_ok = 0;
 uint8_t ibst_status;
 uint8_t ext_req_status;
 
-
 uint8_t can1_count_out = 0;
 uint8_t can1_count_in;
 uint8_t can2_count_out_1 = 0;
@@ -231,7 +218,6 @@ uint8_t can2_count_in_3;
 
 #define MAX_TIMEOUT 10U
 uint32_t timeout = 0;
-
 
 #define NO_FAULT 0U
 #define FAULT_BAD_CHECKSUM 1U
@@ -273,10 +259,12 @@ uint8_t crc8_lut_1d[256];
 
 void CAN1_RX0_IRQ_Handler(void) {
   while ((CAN1->RF0R & CAN_RF0R_FMP0) != 0) {
-    #ifdef DEBUG
-    puts("CAN1 RX\n");
-    #endif
     uint16_t address = CAN1->sFIFOMailBox[0].RIR >> 21;
+    #ifdef DEBUG
+    puts("CAN1 RX: ");
+    puth(address);
+    puts("\n");
+    #endif
     switch (address) {
       case CAN_UPDATE:
         if (GET_BYTES_04(&CAN1->sFIFOMailBox[0]) == 0xdeadface) {
@@ -311,6 +299,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         }
         else {
           state = FAULT_BAD_CHECKSUM;
+          puts("checksum fail 0x20E");
         }
         break;
       case 0x366: ;
@@ -328,7 +317,7 @@ void CAN1_RX0_IRQ_Handler(void) {
     }
     can_rx(0);
     // next
-    CAN1->RF0R |= CAN_RF0R_RFOM0;
+    // CAN1->RF0R |= CAN_RF0R_RFOM0;
   }
 }
 
@@ -340,10 +329,12 @@ void CAN1_SCE_IRQ_Handler(void) {
 
 void CAN2_RX0_IRQ_Handler(void) {
   while ((CAN2->RF0R & CAN_RF0R_FMP0) != 0) {
-    #ifdef DEBUG
-    puts("CAN2 RX\n");
-    #endif
     uint16_t address = CAN2->sFIFOMailBox[0].RIR >> 21;
+    #ifdef DEBUG
+    puts("CAN2 RX: ");
+    puth(address);
+    puts("\n");
+    #endif
     switch (address) {
     /*  case 0x391:
         uint8_t dat[5];
@@ -414,7 +405,6 @@ void CAN2_RX0_IRQ_Handler(void) {
     }
     // next
     can_rx(1);
-    CAN2->RF0R |= CAN_RF0R_RFOM0;
   }
 }
 
@@ -426,14 +416,17 @@ void CAN2_SCE_IRQ_Handler(void) {
 
 void CAN3_RX0_IRQ_Handler(void) {
   while ((CAN3->RF0R & CAN_RF0R_FMP0) != 0) {
+    uint16_t address = CAN3->sFIFOMailBox[0].RIR >> 21;
     #ifdef DEBUG
-    puts("CAN3 RX\n");
+    puts("CAN1 RX: ");
+    puth(address);
+    puts("\n");
+    #else
+    UNUSED(address);
     #endif
-    //uint16_t address = CAN3->sFIFOMailBox[0].RIR >> 21;
 
     // next
     can_rx(2);
-    CAN3->RF0R |= CAN_RF0R_RFOM0;
   }
 }
 
@@ -473,11 +466,14 @@ void TIM3_IRQ_Handler(void) {
     dat[7] = 0x0;
     dat[1] = can2_count_out_1;
     dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
-    CAN2->sTxMailBox[0].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
-    CAN2->sTxMailBox[0].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
-    CAN2->sTxMailBox[0].TDTR = 8;  // len of packet is 5
-    CAN2->sTxMailBox[0].TIR = (0x38D << 21) | 1U;
-    process_can(1);
+
+    CAN_FIFOMailBox_TypeDef to_send;
+    to_send.RDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
+    to_send.RDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
+    to_send.RDTR = 8;
+    to_send.RIR = (0x38D << 21) | 1U;
+    can_send(&to_send, 1, false);
+
   }
   else {
     // old can packet hasn't sent!
@@ -499,14 +495,16 @@ void TIM3_IRQ_Handler(void) {
     dat[6] = 0x00;
     dat[7] = 0x00;
 
-    CAN2->sTxMailBox[1].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
-    CAN2->sTxMailBox[1].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
-    CAN2->sTxMailBox[1].TDTR = 8;  // len of packet is 5
-    CAN2->sTxMailBox[1].TIR = (0x38C << 21) | 1U;
+    CAN_FIFOMailBox_TypeDef to_send;
+    to_send.RDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
+    to_send.RDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
+    to_send.RDTR = 8;
+    to_send.RIR = (0x38C << 21) | 1U;
+    can_send(&to_send, 1, false);;
 
     can2_count_out_1++;
     can2_count_out_1 &= COUNTER_CYCLE;
-    process_can(1);
+
   }
   else {
     // old can packet hasn't sent!
@@ -538,13 +536,16 @@ void TIM3_IRQ_Handler(void) {
       dat[6] = 0x00;
       dat[7] = 0x00;
 
-      CAN2->sTxMailBox[2].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
-      CAN2->sTxMailBox[2].TDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
-      CAN2->sTxMailBox[2].TDTR = 8;  // len of packet is 5
-      CAN2->sTxMailBox[2].TIR = (0x38B << 21) | 1U;
+      CAN_FIFOMailBox_TypeDef to_send;
+      to_send.RDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
+      to_send.RDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
+      to_send.RDTR = 8;
+      to_send.RIR = (0x38B << 21) | 1U;
+      can_send(&to_send, 1, false);
+
       can2_count_out_2++;
       can2_count_out_2 &= COUNTER_CYCLE;
-      process_can(1);
+
     }
     else {
       // old can packet hasn't sent!
@@ -567,13 +568,17 @@ void TIM3_IRQ_Handler(void) {
 
     dat[1] = ((state & 0xFU) << 4) | can1_count_out;
     dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
-    CAN1->sTxMailBox[0].TDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
-    CAN1->sTxMailBox[0].TDHR = dat[4];
-    CAN1->sTxMailBox[0].TDTR = 5;  // len of packet is 5
-    CAN1->sTxMailBox[0].TIR = (0x20F << 21) | 1U;
+  
+    CAN_FIFOMailBox_TypeDef to_send;
+    to_send.RDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
+    to_send.RDHR = dat[4];
+    to_send.RDTR = 8;
+    to_send.RIR = (0x20F << 21) | 1U;
+    can_send(&to_send, 0, false);
+
     can1_count_out++;
     can1_count_out &= COUNTER_CYCLE;
-    process_can(0);
+
   }
   else {
     // old can packet hasn't sent!
@@ -592,6 +597,38 @@ void TIM3_IRQ_Handler(void) {
   } else {
     timeout += 1U;
   }
+
+  // // DEBUG info
+  // #ifdef DEBUG
+  // // iBooster info
+  // puts(" output_rod_target: ");
+  // puth(output_rod_target);
+  // puts("brake_applied: ");
+  // puth(brake_applied);
+  // puts("brake_ok: ");
+  // puth(brake_ok);
+  // puts("\n");
+
+  // // iBooster requests
+  // puts("q_target_ext: ");
+  // puth(q_target_ext);
+  // puts(" q_target_ext_qf: ");
+  // puth(q_target_ext_qf);
+  // puts("\n");
+
+  // // speed sent from 0x366
+  // puts("current_speed: ");
+  // puth(current_speed);
+  // puts("\n");
+
+  // // state
+  // puts("state: ");
+  // puth(state);
+  // puts(" can2state: ");
+  // puth(can2state);
+  // puts("\n");
+  // #endif
+
 }
 
 // ***************************** main code *****************************
@@ -663,7 +700,6 @@ int main(void) {
   set_gpio_mode(GPIOB, 12, MODE_OUTPUT);
   set_gpio_output_type(GPIOB, 12, OUTPUT_TYPE_PUSH_PULL);
   set_gpio_output(GPIOB, 12, 1);
-
 
   watchdog_init();
 

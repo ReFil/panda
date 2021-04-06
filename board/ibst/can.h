@@ -30,6 +30,7 @@ void can_set_forwarding(int from, int to);
 bool can_init(uint8_t can_number);
 void can_init_all(void);
 bool can_tx_check_min_slots_free(uint32_t min);
+void can_send(CAN_FIFOMailBox_TypeDef *to_push, uint8_t bus_number, bool skip_tx_hook);
 bool can_pop(can_ring *q, CAN_FIFOMailBox_TypeDef *elem);
 
 // Ignition detected from CAN meessages
@@ -328,6 +329,26 @@ bool can_tx_check_min_slots_free(uint32_t min) {
     (can_slots_empty(&can_tx1_q) >= min) &&
     (can_slots_empty(&can_tx2_q) >= min) &&
     (can_slots_empty(&can_tx3_q) >= min);
+}
+
+void can_send(CAN_FIFOMailBox_TypeDef *to_push, uint8_t bus_number, bool skip_tx_hook) {
+  if (!skip_tx_hook) {
+    #ifdef DEBUG
+    puts("TX CAN");
+    puth2(bus_number);
+    puts(" ");
+    puth(to_push->RIR >> 21);
+    puts("\n");
+    #endif
+    if (bus_number < BUS_MAX) {
+      // add CAN packet to send queue
+      // bus number isn't passed through
+      to_push->RDTR &= 0xF;
+      can_fwd_errs += can_push(can_queues[bus_number], to_push) ? 0U : 1U;
+      process_can(CAN_NUM_FROM_BUS_NUM(bus_number));
+      
+    }
+  }
 }
 
 void can_set_forwarding(int from, int to) {
