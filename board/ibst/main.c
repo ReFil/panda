@@ -323,7 +323,7 @@ void CAN1_RX0_IRQ_Handler(void) {
           state = FAULT_BAD_CHECKSUM;
           puts("checksum fail 0x20E \n");
           puts("DATA: ");
-          for(int ii = 0; ii < 4; ii++){ 
+          for(int ii = 0; ii < 4; ii++){
             puth2(dat[ii]);
           }
           puts("\n");
@@ -335,8 +335,9 @@ void CAN1_RX0_IRQ_Handler(void) {
         }
         break;
       case 0x366: ;
-        uint8_t dat2[4];
-        for (int i=0; i<4; i++) {
+        uint64_t data2; //sendESP_private2
+        uint8_t *dat2 = (uint8_t *)&data2;
+        for (int i=0; i<8; i++) {
           dat2[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
         if(dat2[0] == lut_checksum(dat2, 4, crc8_lut_1d)) {
@@ -346,7 +347,7 @@ void CAN1_RX0_IRQ_Handler(void) {
           state = FAULT_BAD_CHECKSUM;
           puts("checksum fail 0x366 \n");
           puts("DATA: ");
-          for(int ii = 0; ii < 4; ii++){ 
+          for(int ii = 0; ii < 4; ii++){
             puth2(dat2[ii]);
           }
           puts("\n");
