@@ -197,17 +197,40 @@ void CAN3_TX_IRQ_Handler(void) {
   process_can(2);
 }
 
+bool sent;
+
+// OUTPUTS
+// 0x38B
+#define P_EST_MAX 0
+#define P_EST_MAX_QF 1
+#define VEHICLE_QF 1
+#define IGNITION_ON 0
 uint8_t current_speed = 0;
+
+// 0x38C
+#define P_LIMIT_EXTERNAL 120
 uint16_t q_target_ext = 0;
 bool q_target_ext_qf = 0;
 
+// 0x38D
+#define P_TARGET_DRIVER 0
+#define P_TARGET_DRIVER_QF 0
+#define ABS_ACTIVE 0
+#define P_MC 0
+#define P_MC_QF 1
+
+// INPUTS
+
+// 0x38E
 uint16_t output_rod_target = 0;
 bool brake_applied = 0;
 bool brake_ok = 0;
 
+// 0x38F
 uint8_t ibst_status;
 uint8_t ext_req_status;
 
+// COUNTERS
 uint8_t can1_count_out = 0;
 uint8_t can1_count_in;
 uint8_t can2_count_out_1 = 0;
@@ -255,7 +278,6 @@ uint8_t can2state = NO_EXTFAULT1;
 
 const uint8_t crc_poly = 0x1D;  // standard crc8 SAE J1850
 uint8_t crc8_lut_1d[256];
-
 
 void CAN1_RX0_IRQ_Handler(void) {
   while ((CAN1->RF0R & CAN_RF0R_FMP0) != 0) {
@@ -436,23 +458,6 @@ void CAN3_SCE_IRQ_Handler(void) {
   llcan_clear_send(CAN3);
 }
 
-
-bool sent;
-
-#define P_LIMIT_EXTERNAL 120
-
-#define P_EST_MAX 0
-#define P_EST_MAX_QF 1
-#define VEHICLE_QF 1
-#define IGNITION_ON 0
-
-#define P_TARGET_DRIVER 0
-#define P_TARGET_DRIVER_QF 0
-#define ABS_ACTIVE 0
-#define P_MC 0
-#define P_MC_QF 1
-
-
 void TIM3_IRQ_Handler(void) {
   // check timer for sending the user pedal and clearing the CAN
   if ((CAN2->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
@@ -486,7 +491,6 @@ void TIM3_IRQ_Handler(void) {
     uint8_t dat[8]; //sendESP_private2
     uint16_t p_limit_external = P_LIMIT_EXTERNAL * 2;
 
-    dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
     dat[1] = can2_count_out_1 & COUNTER_CYCLE;
     dat[2] = p_limit_external & 0xFF;
     dat[3] = ((p_limit_external >> 8U) & 0x1U) | (q_target_ext & 0xFU) << 4U;
@@ -494,6 +498,7 @@ void TIM3_IRQ_Handler(void) {
     dat[5] = ((q_target_ext >> 12U) & 0xFU) | (q_target_ext_qf << 4U); // what is ESP_diagnosticESP?
     dat[6] = 0x00;
     dat[7] = 0x00;
+    dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
 
     CAN_FIFOMailBox_TypeDef to_send;
     to_send.RDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
@@ -527,7 +532,6 @@ void TIM3_IRQ_Handler(void) {
       uint8_t dat[8];
       uint16_t ESP_vehicleSpeed = (((current_speed*16) / 9) & 0x3FFF);
 
-      dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
       dat[1] = can2_count_out_2 & COUNTER_CYCLE;
       dat[2] = P_EST_MAX;
       dat[3] = P_EST_MAX_QF | (ESP_vehicleSpeed & 0x3FU);
@@ -535,6 +539,7 @@ void TIM3_IRQ_Handler(void) {
       dat[5] = VEHICLE_QF | (IGNITION_ON << 3U);
       dat[6] = 0x00;
       dat[7] = 0x00;
+      dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
 
       CAN_FIFOMailBox_TypeDef to_send;
       to_send.RDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
@@ -597,37 +602,6 @@ void TIM3_IRQ_Handler(void) {
   } else {
     timeout += 1U;
   }
-
-  // // DEBUG info
-  // #ifdef DEBUG
-  // // iBooster info
-  // puts(" output_rod_target: ");
-  // puth(output_rod_target);
-  // puts("brake_applied: ");
-  // puth(brake_applied);
-  // puts("brake_ok: ");
-  // puth(brake_ok);
-  // puts("\n");
-
-  // // iBooster requests
-  // puts("q_target_ext: ");
-  // puth(q_target_ext);
-  // puts(" q_target_ext_qf: ");
-  // puth(q_target_ext_qf);
-  // puts("\n");
-
-  // // speed sent from 0x366
-  // puts("current_speed: ");
-  // puth(current_speed);
-  // puts("\n");
-
-  // // state
-  // puts("state: ");
-  // puth(state);
-  // puts(" can2state: ");
-  // puth(can2state);
-  // puts("\n");
-  // #endif
 
 }
 
@@ -696,7 +670,8 @@ int main(void) {
   // 48mhz / 65536 ~= 732
   timer_init(TIM3, 7);
   NVIC_EnableIRQ(TIM3_IRQn);
-  //power on ibooster
+
+  // power on ibooster. needs to power on AFTER sending CAN to prevent ibst state from being 4
   set_gpio_mode(GPIOB, 12, MODE_OUTPUT);
   set_gpio_output_type(GPIOB, 12, OUTPUT_TYPE_PUSH_PULL);
   set_gpio_output(GPIOB, 12, 1);
