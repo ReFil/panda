@@ -321,7 +321,17 @@ void CAN1_RX0_IRQ_Handler(void) {
         }
         else {
           state = FAULT_BAD_CHECKSUM;
-          puts("checksum fail 0x20E");
+          puts("checksum fail 0x20E \n");
+          puts("DATA: ");
+          for(int ii = 0; ii < 4; ii++){ 
+            puth2(dat[ii]);
+          }
+          puts("\n");
+          puts("expected: ");
+          puth2(lut_checksum(dat, 5, crc8_lut_1d));
+          puts(" got: ");
+          puth2(dat[0]);
+          puts("\n");
         }
         break;
       case 0x366: ;
@@ -334,6 +344,17 @@ void CAN1_RX0_IRQ_Handler(void) {
         }
         else {
           state = FAULT_BAD_CHECKSUM;
+          puts("checksum fail 0x366 \n");
+          puts("DATA: ");
+          for(int ii = 0; ii < 4; ii++){ 
+            puth2(dat2[ii]);
+          }
+          puts("\n");
+          puts("expected: ");
+          puth2(lut_checksum(dat2, 4, crc8_lut_1d));
+          puts(" got: ");
+          puth2(dat2[0]);
+          puts("\n");
         }
       default: ;
     }
