@@ -308,7 +308,7 @@ void CAN1_RX0_IRQ_Handler(void) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
         uint8_t index = dat[1] & COUNTER_CYCLE;
-        if(dat[0] == lut_checksum(dat, 8, crc8_lut_1d)) {
+        if(dat[0] == lut_checksum(dat, 5, crc8_lut_1d)) {
           if (((can1_count_in + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
             q_target_ext = (data >> 14);
@@ -518,7 +518,7 @@ void TIM3_IRQ_Handler(void) {
       puts("CAN2 MISS2\n");
     #endif
   }
-  if (!sent){ 
+  if (!sent){
     if ((CAN2->TSR & CAN_TSR_TME2) == CAN_TSR_TME2) {
       // uint64_t data; //sendESP_private1 every 20ms
       // uint8_t *dat = (uint8_t *)&data;
@@ -528,7 +528,7 @@ void TIM3_IRQ_Handler(void) {
       // data |= ((((uint32_t) current_speed*16)/9)& 0x3FFF) << 24;
       // data |= (uint64_t) VEHICLE_QF << 40;
       // data |= (uint64_t) IGNITION_ON << 43;
-      
+
       uint8_t dat[8];
       uint16_t ESP_vehicleSpeed = (((current_speed*16) / 9) & 0x3FFF);
 
@@ -572,8 +572,8 @@ void TIM3_IRQ_Handler(void) {
     dat[4] = (can2state & 0xFU) << 4;
 
     dat[1] = ((state & 0xFU) << 4) | can1_count_out;
-    dat[0] = lut_checksum(dat, 8, crc8_lut_1d);
-  
+    dat[0] = lut_checksum(dat, 5, crc8_lut_1d);
+
     CAN_FIFOMailBox_TypeDef to_send;
     to_send.RDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
     to_send.RDHR = dat[4];
