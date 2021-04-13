@@ -209,7 +209,8 @@ uint8_t current_speed = 0;
 
 // 0x38C
 #define P_LIMIT_EXTERNAL 120
-uint16_t q_target_ext = 0;
+#define Q_TARGET_DEFAULT 0x7e00
+uint16_t q_target_ext = Q_TARGET_DEFAULT; // default is 0x7e00
 bool q_target_ext_qf = 0;
 
 // 0x38D
@@ -239,7 +240,7 @@ uint8_t can2_count_in_1;
 uint8_t can2_count_in_2;
 uint8_t can2_count_in_3;
 
-#define MAX_TIMEOUT 10U
+#define MAX_TIMEOUT 50U
 uint32_t timeout = 0;
 
 #define NO_FAULT 0U
@@ -302,28 +303,36 @@ void CAN1_RX0_IRQ_Handler(void) {
         }
         break;
       case 0x20E: ;
-        uint64_t data; //sendESP_private2
-        uint8_t *dat = (uint8_t *)&data;
-        for (int i=0; i<8; i++) {
+        //uint64_t data; //sendESP_private2
+        //uint8_t *dat = (uint8_t *)&data;
+        uint8_t dat[5];
+        for (int i=0; i<5; i++) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
         uint8_t index = dat[1] & COUNTER_CYCLE;
         if(dat[0] == lut_checksum(dat, 5, crc8_lut_1d)) {
           if (((can1_count_in + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
-            q_target_ext = (data >> 14);
-            q_target_ext_qf = (data >> 12) & !brake_applied & (state == NO_FAULT);
+            if (!brake_applied){ 
+              q_target_ext_qf = dat[1] >> 4U;
+              q_target_ext = ((dat[3] << 8U) | dat[2]);
+            } else {
+              q_target_ext_qf = 0;
+              q_target_ext = 0x7e00;
+            }
             can1_count_in++;
           }
           else {
             state = FAULT_COUNTER;
           }
+          state = NO_FAULT;
+          timeout = 0;
         }
         else {
           state = FAULT_BAD_CHECKSUM;
           puts("checksum fail 0x20E \n");
           puts("DATA: ");
-          for(int ii = 0; ii < 4; ii++){
+          for(int ii = 0; ii < 5; ii++){
             puth2(dat[ii]);
           }
           puts("\n");
@@ -335,12 +344,11 @@ void CAN1_RX0_IRQ_Handler(void) {
         }
         break;
       case 0x366: ;
-        uint64_t data2; //sendESP_private2
-        uint8_t *dat2 = (uint8_t *)&data2;
-        for (int i=0; i<8; i++) {
+        uint8_t dat2[4];
+        for (int i=0; i<4; i++) {
           dat2[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
-        if(dat2[0] == lut_checksum(dat2, 4, crc8_lut_1d)) {
+        if(dat2[0] == lut_checksum(dat2, 4, crc8_lut_1d)) { 
           current_speed = dat2[3];
         }
         else {
@@ -621,10 +629,17 @@ void TIM3_IRQ_Handler(void) {
   // up timeout for gas set
   if (timeout == MAX_TIMEOUT) {
     state = FAULT_TIMEOUT;
+    q_target_ext_qf = 0;
+    q_target_ext = Q_TARGET_DEFAULT;
   } else {
     timeout += 1U;
   }
 
+  #ifdef DEBUG
+  puts("BRAKE_REQ: ");
+  puth(q_target_ext);
+  puts("\n");
+  #endif
 }
 
 // ***************************** main code *****************************
