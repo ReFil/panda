@@ -221,9 +221,12 @@ bool q_target_ext_qf = 0;
 #define P_MC_QF 1
 
 // INPUTS
+uint16_t pos_input = 0;
+bool pid_enable = 0;
 
 // 0x38E
 uint16_t output_rod_target = 0;
+bool driver_brake_applied = 0;
 bool brake_applied = 0;
 bool brake_ok = 0;
 
@@ -305,17 +308,24 @@ void CAN1_RX0_IRQ_Handler(void) {
       case 0x20E: ;
         //uint64_t data; //sendESP_private2
         //uint8_t *dat = (uint8_t *)&data;
-        uint8_t dat[5];
-        for (int i=0; i<5; i++) {
+        uint8_t dat[6];
+        for (int i=0; i<6; i++) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
         uint8_t index = dat[1] & COUNTER_CYCLE;
-        if(dat[0] == lut_checksum(dat, 5, crc8_lut_1d)) {
+        if(dat[0] == lut_checksum(dat, 6, crc8_lut_1d)) {
           if (((can1_count_in + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
-            if (!brake_applied){ 
-              q_target_ext_qf = dat[1] >> 4U;
-              q_target_ext = ((dat[3] << 8U) | dat[2]);
+            if (!driver_brake_applied) {
+              if(dat[1] >> 4U) { //relative/velocity mode
+                q_target_ext_qf = dat[1] >> 4U;
+                q_target_ext = ((dat[3] << 8U) | dat[2]);
+                pid_enable = 0;
+              }
+              else if (dat[1] >> 5U) { //Position/PID mode
+                pos_input = ((dat[5] & 0xFU) << 8U) | dat[4]
+                pid_enable = 1;
+              }
             } else {
               q_target_ext_qf = 0;
               q_target_ext = 0x7e00;
@@ -348,7 +358,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         for (int i=0; i<4; i++) {
           dat2[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
-        if(dat2[0] == lut_checksum(dat2, 4, crc8_lut_1d)) { 
+        if(dat2[0] == lut_checksum(dat2, 4, crc8_lut_1d)) {
           current_speed = dat2[3];
         }
         else {
@@ -411,7 +421,7 @@ void CAN2_RX0_IRQ_Handler(void) {
         }
         break;*/
       case 0x38E: ;
-        uint8_t dat[8]; //sendESP_private2
+        uint8_t dat[8]; //IBST_private1
         for (int i=0; i<8; i++) {
           dat[i] = GET_BYTE(&CAN2->sFIFOMailBox[0], i);
         }
@@ -431,7 +441,7 @@ void CAN2_RX0_IRQ_Handler(void) {
         }
         break;
       case 0x38F: ;
-        uint64_t data2; //sendESP_private2
+        uint64_t data2; //IBST_private2
         uint8_t *dat2 = (uint8_t *)&data2;
         for (int i=0; i<8; i++) {
           dat2[i] = GET_BYTE(&CAN2->sFIFOMailBox[0], i);
@@ -441,8 +451,14 @@ void CAN2_RX0_IRQ_Handler(void) {
           if (((can2_count_in_3 + 1U) & COUNTER_CYCLE) == index2) {
             //if counter and checksum valid accept commands
             ibst_status = (data2 >> 19) & 0x7;
-            brake_applied = (dat2[2] & 0x1) | !((dat2[2] >> 1) & 0x1); //Sends brake applied if ibooster says brake applied or if there's a fault with the brake sensor, assumes worst case scenario
-
+            driver_brake_applied = (dat2[2] & 0x1) | !((dat2[2] >> 1) & 0x1); //Sends brake applied if ibooster says brake applied or if there's a fault with the brake sensor, assumes worst case scenario
+            brake_applied = driver_brake_applied | (output_rod_target > 0x23FU);
+            if(brake_applied) { //Switch brake light relay
+              set_gpio_output(GPIOB, 13, 1);
+            }
+            else {
+              set_gpio_output(GPIOB, 13, 0);
+            }
             can2_count_in_3++;
           }
           else {
@@ -488,8 +504,38 @@ void CAN3_SCE_IRQ_Handler(void) {
   llcan_clear_send(CAN3);
 }
 
+#define P 20
+#define I 0
+#define D 0
+
+#define OUTMAX 0x9200  //+-40ml/s
+#define OUTMIN 0x6A00
+
+uint16_t last_input;
+int32_t output_sum;
+
+
 void TIM3_IRQ_Handler(void) {
-  // check timer for sending the user pedal and clearing the CAN
+  if(pid_enable) { //run PID loop
+    int32_t error = pos_input - output_rod_target;
+    uint16_t d_input = pos_input - last_input;
+    output_sum += error * I;
+    if(output_sum > OUTMAX) {
+      output_sum = OUTMAX;
+    }
+    if(output_sum < OUTMIN) {
+      output_sum = OUTMIN;
+    }
+    uint16_t qtarget_output = error * P;
+    qtarget_output += output_sum - (d_input * D);
+    if(qtarget_output > OUTMAX) {
+      qtarget_output = OUTMAX;
+    }
+    if(qtarget_output < OUTMIN) {
+      qtarget_output = OUTMIN;
+    }
+  }
+  // cmain loop for sending 100hz messages
   if ((CAN2->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     uint8_t dat[8]; //sendESP_private3
     uint16_t pTargetDriver = P_TARGET_DRIVER * 4;
@@ -550,16 +596,7 @@ void TIM3_IRQ_Handler(void) {
   }
   if (!sent){
     if ((CAN2->TSR & CAN_TSR_TME2) == CAN_TSR_TME2) {
-      // uint64_t data; //sendESP_private1 every 20ms
-      // uint8_t *dat = (uint8_t *)&data;
-
-      // data = P_EST_MAX << 16;
-      // data |= P_EST_MAX_QF << 24;
-      // data |= ((((uint32_t) current_speed*16)/9)& 0x3FFF) << 24;
-      // data |= (uint64_t) VEHICLE_QF << 40;
-      // data |= (uint64_t) IGNITION_ON << 43;
-
-      uint8_t dat[8];
+      uint8_t dat[8]; //sendESP_private1 every 20ms
       uint16_t ESP_vehicleSpeed = (((current_speed*16) / 9) & 0x3FFF);
 
       dat[1] = can2_count_out_2 & COUNTER_CYCLE;
@@ -597,8 +634,8 @@ void TIM3_IRQ_Handler(void) {
   if ((CAN1->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     uint8_t dat[5];
     brake_ok = (ibst_status && 0x7);
-    dat[2] = brake_ok | brake_applied << 1U | (output_rod_target & 0x3FU) << 2U;
-    dat[3] = (output_rod_target >> 6U) & 0x3FU;
+    dat[2] = brake_ok | driver_brake_applied << 1U | brake_applied << 2U | (output_rod_target & 0x3FU);
+    dat[3] = (output_rod_target >> 8U) & 0x3FU;
     dat[4] = (can2state & 0xFU) << 4;
 
     dat[1] = ((state & 0xFU) << 4) | can1_count_out;
@@ -644,9 +681,11 @@ void TIM3_IRQ_Handler(void) {
 
 // ***************************** main code *****************************
 
+
 void ibst(void) {
   // read/write
   watchdog_feed();
+
 }
 
 int main(void) {
@@ -712,6 +751,10 @@ int main(void) {
   set_gpio_mode(GPIOB, 12, MODE_OUTPUT);
   set_gpio_output_type(GPIOB, 12, OUTPUT_TYPE_PUSH_PULL);
   set_gpio_output(GPIOB, 12, 1);
+
+  //Brake switch relay
+  set_gpio_mode(GPIOB, 13, MODE_OUTPUT);
+  set_gpio_output_type(GPIOB, 13, OUTPUT_TYPE_PUSH_PULL);
 
   watchdog_init();
 
