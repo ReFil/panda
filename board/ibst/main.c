@@ -323,7 +323,7 @@ void CAN1_RX0_IRQ_Handler(void) {
                 pid_enable = 0;
               }
               else if (dat[1] >> 5U) { //Position/PID mode
-                pos_input = ((dat[5] & 0xFU) << 8U) | dat[4]
+                pos_input = ((dat[5] & 0xFU) << 8U) | dat[4];
                 pid_enable = 1;
               }
             } else {
