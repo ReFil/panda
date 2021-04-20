@@ -12,7 +12,7 @@ MIN_ACCEL = -3.0
 ISO_MAX_ACCEL = 2.0
 ISO_MIN_ACCEL = -3.5
 
-class TestOtherSafety(common.PandaSafetyTest, common.InterceptorSafetyTest,
+class TestOcelotSafety(common.PandaSafetyTest, common.InterceptorSafetyTest,
                        common.TorqueSteeringSafetyTest):
 
   TX_MSGS = [[0x283, 0], [0x2E6, 0], [0x2E7, 0], [0x33E, 0], [0x344, 0], [0x365, 0], [0x366, 0], [0x4CB, 0],  # DSU bus 0
@@ -37,7 +37,7 @@ class TestOtherSafety(common.PandaSafetyTest, common.InterceptorSafetyTest,
   def setUp(self):
     self.packer = CANPackerPanda("toyota_prius_2017_pt_generated")
     self.safety = libpandasafety_py.libpandasafety
-    self.safety.set_safety_hooks(Panda.SAFETY_OTHER, 66)
+    self.safety.set_safety_hooks(Panda.SAFETY_OCELOT, 66)
     self.safety.init_tests()
 
   def _torque_meas_msg(self, torque):
