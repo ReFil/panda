@@ -44,6 +44,23 @@ jobs:
         run: $RUN "cd /tmp/openpilot/panda/board/pedal && make obj/comma.bin"
       - name: Build pedal STM bootstub image
         run: $RUN "cd /tmp/openpilot/panda/board/pedal && make obj/bootstub.bin"
+      - name: Build better_pedal STM image
+        run: $RUN "cd /tmp/openpilot/panda/board/better_pedal && make obj/comma.bin"
+      - name: Build better_pedal STM bootstub image
+        run: $RUN "cd /tmp/openpilot/panda/board/better_pedal && make obj/bootstub.bin"
+      - name: Build ctrls STM image
+        run: $RUN "cd /tmp/openpilot/panda/board/ctrls && make obj/comma.bin"
+      - name: Build ctrls STM bootstub image
+        run: $RUN "cd /tmp/openpilot/panda/board/ctrls && make obj/bootstub.bin"
+      - name: Build ibst STM image
+        run: $RUN "cd /tmp/openpilot/panda/board/isbt && make obj/comma.bin"
+      - name: Build ibst STM bootstub image
+        run: $RUN "cd /tmp/openpilot/panda/board/ibst && make obj/bootstub.bin"
+      - name: Upload firmware archive
+        uses: actions/upload-artifact@v2
+        with:
+          name: firmware
+          path: /tmp/openpilot/panda/board/*/obj/*.bin
 
   safety:
     name: safety
