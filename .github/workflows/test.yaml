@@ -53,7 +53,7 @@ jobs:
       - name: Build ctrls STM bootstub image
         run: $RUN "cd /tmp/openpilot/panda/board/ctrls && mkdir obj && make obj/bootstub.bin"
       - name: Build ibst STM image
-        run: $RUN "cd /tmp/openpilot/panda/board/ibst && mkdir obj && make obj/comma.bin"
+        run: $RUN "cd /tmp/openpilot/panda/board/ibst && mkdir obj && make obj/panda.bin"
       - name: Build ibst STM bootstub image
         run: $RUN "cd /tmp/openpilot/panda/board/ibst && mkdir obj && make obj/bootstub.bin"
       - name: Upload firmware archive
