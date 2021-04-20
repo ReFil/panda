@@ -60,7 +60,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: firmware
-          path: /tmp/openpilot/panda/board/*/obj/*.bin
+          path: /tmp/openpilot/panda/board/*/obj/bootstub.bin
 
   safety:
     name: safety
