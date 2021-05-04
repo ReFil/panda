@@ -150,7 +150,7 @@ void CAN1_RX0_IRQ_Handler(void) {
       uint16_t value_0 = (dat[2] << 8) | dat[1];
       uint16_t value_1 = (dat[4] << 8) | dat[3];
       bool enable = ((dat[5] >> 7) & 1U) != 0U;
-      uint8_t index = dat[6] & COUNTER_CYCLE;
+      uint8_t index = dat[5] & COUNTER_CYCLE;
       if (lut_checksum(dat, CAN_GAS_SIZE, crc8_lut_1d) == dat[0]) {
         if (((current_index + 1U) & COUNTER_CYCLE) == index) {
           #ifdef DEBUG
