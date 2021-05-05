@@ -21,7 +21,7 @@ misra_output=$( cat /tmp/misra/misra_output.txt | grep -v ": information: " ) ||
 
 
 printf "\nPEDAL CODE\n"
-cppcheck -UPANDA -DPEDAL -UCAN3 \
+cppcheck -UPANDA -DPEDAL -UCAN3 -USTM32F4 -UIBST -UCTRLS \
          --suppressions-list=suppressions.txt \
          -I $PANDA_DIR/board/ --dump --enable=all --inline-suppr --force \
          $PANDA_DIR/board/pedal/main.c 2>/tmp/misra/cppcheck_pedal_output.txt
@@ -45,7 +45,7 @@ cppcheck_better_pedal_output=$( cat /tmp/misra/cppcheck_better_pedal_output.txt 
 misra_better_pedal_output=$( cat /tmp/misra/misra_better_pedal_output.txt | grep -v ": information: " ) || true
 
 printf "\nIBST CODE\n"
-cppcheck -UPANDA -DIBST -UCAN3 \
+cppcheck -UPANDA -DIBST -UCAN3 -UPEDAL\
          --suppressions-list=suppressions.txt \
          -I $PANDA_DIR/board/ --dump --enable=all --inline-suppr --force \
          $PANDA_DIR/board/ibst/main.c 2>/tmp/misra/cppcheck_ibst_output.txt
@@ -53,11 +53,11 @@ cppcheck -UPANDA -DIBST -UCAN3 \
 python /usr/share/cppcheck/addons/misra.py $PANDA_DIR/board/ibst/main.c.dump 2> /tmp/misra/misra_ibst_output.txt || true
 
 # strip (information) lines
-cppcheck_ibst_output=$( cat /tmp/misra/cppcheck_isbt_output.txt | grep -v ": information: " ) || true
+cppcheck_ibst_output=$( cat /tmp/misra/cppcheck_ibst_output.txt | grep -v ": information: " ) || true
 misra_ibst_output=$( cat /tmp/misra/misra_ibst_output.txt | grep -v ": information: " ) || true
 
 printf "\nCTRLS CODE\n"
-cppcheck -UPANDA -DCTRLS -UCAN3 \
+cppcheck -UPANDA -DCTRLS -UCAN3 -UPEDAL -USTM32F4 -UIBST\
          --suppressions-list=suppressions.txt \
          -I $PANDA_DIR/board/ --dump --enable=all --inline-suppr --force \
          $PANDA_DIR/board/ctrls/main.c 2>/tmp/misra/cppcheck_ctrls_output.txt
