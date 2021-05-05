@@ -633,7 +633,7 @@ void TIM3_IRQ_Handler(void) {
   //send to EON
   if ((CAN1->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     uint8_t dat[5];
-    brake_ok = (ibst_status && 0x7);
+    brake_ok = (ibst_status == 0x7);
     dat[2] = brake_ok | driver_brake_applied << 1U | brake_applied << 2U | (output_rod_target & 0x3FU);
     dat[3] = (output_rod_target >> 8U) & 0x3FU;
     dat[4] = (can2state & 0xFU) << 4;
@@ -737,7 +737,9 @@ int main(void) {
   }
 
   bool ret = llcan_init(CAN1);
+  UNUSED(ret);
   ret = llcan_init(CAN2);
+  UNUSED(ret);
   ret = llcan_init(CAN3);
   UNUSED(ret);
 
