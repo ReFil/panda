@@ -325,6 +325,7 @@ void CAN1_RX0_IRQ_Handler(void) {
               else if (dat[1] >> 5U) { //Position/PID mode
                 pos_input = ((dat[5] & 0xFU) << 8U) | dat[4];
                 pid_enable = 1;
+                q_target_ext_qf = 1;
               }
             } else {
               q_target_ext_qf = 0;
@@ -451,8 +452,8 @@ void CAN2_RX0_IRQ_Handler(void) {
           if (((can2_count_in_3 + 1U) & COUNTER_CYCLE) == index2) {
             //if counter and checksum valid accept commands
             ibst_status = (data2 >> 19) & 0x7;
-            driver_brake_applied = (dat2[2] & 0x1) | !((dat2[2] >> 1) & 0x1); //Sends brake applied if ibooster says brake applied or if there's a fault with the brake sensor, assumes worst case scenario
-            brake_applied = driver_brake_applied | (output_rod_target > 0x23FU);
+            driver_brake_applied = ((dat2[2] & 0x1) | !((dat2[2] >> 1) & 0x1)); //Sends brake applied if ibooster says brake applied or if there's a fault with the brake sensor, assumes worst case scenario
+            brake_applied = (driver_brake_applied | (output_rod_target > 0x23FU));
             if(brake_applied) { //Switch brake light relay
               set_gpio_output(GPIOB, 13, 1);
             }
@@ -534,6 +535,7 @@ void TIM3_IRQ_Handler(void) {
     if(qtarget_output < OUTMIN) {
       qtarget_output = OUTMIN;
     }
+    q_target_ext = qtarget_output;
   }
   // cmain loop for sending 100hz messages
   if ((CAN2->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
@@ -634,7 +636,7 @@ void TIM3_IRQ_Handler(void) {
   if ((CAN1->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     uint8_t dat[5];
     brake_ok = (ibst_status == 0x7);
-    dat[2] = brake_ok | driver_brake_applied << 1U | brake_applied << 2U | (output_rod_target & 0x3FU);
+    dat[2] = (brake_ok) | (driver_brake_applied << 1U) | (brake_applied << 2U) | (output_rod_target & 0x3FU);
     dat[3] = (output_rod_target >> 8U) & 0x3FU;
     dat[4] = (can2state & 0xFU) << 4;
 

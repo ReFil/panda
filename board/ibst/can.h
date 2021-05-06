@@ -49,7 +49,7 @@ int can_live = 0, pending_can_live = 0, can_loopback = 0, can_silent = ALL_CAN_S
 
 #define can_buffer(x, size) \
   CAN_FIFOMailBox_TypeDef elems_##x[size]; \
-  can_ring can_##x = { .w_ptr = 0, .r_ptr = 0, .fifo_size = size, .elems = (CAN_FIFOMailBox_TypeDef *)&elems_##x };
+  can_ring can_##x = { .w_ptr = 0, .r_ptr = 0, .fifo_size = (size), .elems = ((CAN_FIFOMailBox_TypeDef *)&elems_##x) };
 
 can_buffer(rx_q, 0x1000)
 can_buffer(tx1_q, 0x100)
@@ -346,7 +346,7 @@ void can_send(CAN_FIFOMailBox_TypeDef *to_push, uint8_t bus_number, bool skip_tx
       to_push->RDTR &= 0xF;
       can_fwd_errs += can_push(can_queues[bus_number], to_push) ? 0U : 1U;
       process_can(CAN_NUM_FROM_BUS_NUM(bus_number));
-      
+
     }
   }
 }
@@ -367,4 +367,3 @@ bool can_init(uint8_t can_number) {
   }
   return ret;
 }
-
