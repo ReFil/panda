@@ -452,7 +452,7 @@ void CAN2_RX0_IRQ_Handler(void) {
           if (((can2_count_in_3 + 1U) & COUNTER_CYCLE) == index2) {
             //if counter and checksum valid accept commands
             ibst_status = (data2 >> 19) & 0x7;
-            driver_brake_applied = ((dat2[2] & 0x1) | !((dat2[2] >> 1) & 0x1)); //Sends brake applied if ibooster says brake applied or if there's a fault with the brake sensor, assumes worst case scenario
+            driver_brake_applied = ((dat2[2] & 0x1) | (!((dat2[2] >> 1) & 0x1))); //Sends brake applied if ibooster says brake applied or if there's a fault with the brake sensor, assumes worst case scenario
             brake_applied = (driver_brake_applied | (output_rod_target > 0x23FU));
             if(brake_applied) { //Switch brake light relay
               set_gpio_output(GPIOB, 13, 1);
