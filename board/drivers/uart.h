@@ -25,14 +25,14 @@ typedef struct uart_ring {
     .w_ptr_tx = 0, \
     .r_ptr_tx = 0, \
     .elems_tx = ((uint8_t *)&elems_tx_##x), \
-    .tx_fifo_size = size_tx, \
+    .tx_fifo_size = (size_tx), \
     .w_ptr_rx = 0, \
     .r_ptr_rx = 0, \
     .elems_rx = ((uint8_t *)&elems_rx_##x), \
-    .rx_fifo_size = size_rx, \
-    .uart = uart_ptr, \
-    .callback = callback_ptr, \
-    .dma_rx = rx_dma \
+    .rx_fifo_size = (size_rx), \
+    .uart = (uart_ptr), \
+    .callback = (callback_ptr), \
+    .dma_rx = (rx_dma) \
   };
 
 
