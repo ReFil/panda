@@ -519,16 +519,16 @@ int32_t output_sum;
 void TIM3_IRQ_Handler(void) {
   if(pid_enable) { //run PID loop
     int32_t error = pos_input - output_rod_target;
-    uint16_t d_input = pos_input - last_input;
-    output_sum += error * I;
-    if(output_sum > OUTMAX) {
-      output_sum = OUTMAX;
-    }
-    if(output_sum < OUTMIN) {
-      output_sum = OUTMIN;
-    }
+    //uint16_t d_input = pos_input - last_input;
+    //output_sum += error * I;
+    //if(output_sum > OUTMAX) {
+    //  output_sum = OUTMAX;
+    //}
+    //if(output_sum < OUTMIN) {
+    //  output_sum = OUTMIN;
+    //}
     uint16_t qtarget_output = error * P;
-    qtarget_output += output_sum - (d_input * D);
+    //qtarget_output += output_sum - (d_input * D);
     if(qtarget_output > OUTMAX) {
       qtarget_output = OUTMAX;
     }
