@@ -102,12 +102,13 @@ void black_set_gps_mode(uint8_t mode) {
 void black_set_can_mode(uint8_t mode){
   switch (mode) {
     case CAN_MODE_NORMAL:
-    set_gpio_mode(GPIOB, 5, MODE_INPUT);
-    set_gpio_mode(GPIOB, 6, MODE_INPUT);
+      set_gpio_mode(GPIOB, 5, MODE_INPUT);
+      set_gpio_mode(GPIOB, 6, MODE_INPUT);
 
     // B12,B13: OBD mode
-    set_gpio_alternate(GPIOB, 12, GPIO_AF9_CAN2);
-    set_gpio_alternate(GPIOB, 13, GPIO_AF9_CAN2);
+      set_gpio_alternate(GPIOB, 12, GPIO_AF9_CAN2);
+      set_gpio_alternate(GPIOB, 13, GPIO_AF9_CAN2);
+      break;
     case CAN_MODE_OBD_CAN2:
       if ((bool)(mode == CAN_MODE_NORMAL) != (bool)(car_harness_status == HARNESS_STATUS_FLIPPED)) {
         // B12,B13: disable OBD mode
