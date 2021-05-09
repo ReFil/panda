@@ -141,8 +141,7 @@ void black_usb_power_mode_tick(uint32_t uptime){
 
 bool black_check_ignition(void){
   // ignition is checked through harness
-  //return harness_check_ignition();
-  return true;
+  return harness_check_ignition();
 }
 
 uint32_t black_read_current(void){
