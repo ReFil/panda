@@ -209,8 +209,8 @@ uint8_t current_speed = 0;
 
 // 0x38C
 #define P_LIMIT_EXTERNAL 120
-#define Q_TARGET_DEFAULT 0x7e00
-uint16_t q_target_ext = Q_TARGET_DEFAULT; // default is 0x7e00
+#define Q_TARGET_DEFAULT 0x7e00 // this is the zero point
+uint16_t q_target_ext = Q_TARGET_DEFAULT;
 bool q_target_ext_qf = 0;
 
 // 0x38D
@@ -221,8 +221,10 @@ bool q_target_ext_qf = 0;
 #define P_MC_QF 1
 
 // INPUTS
+uint16_t rel_input = 0;
 uint16_t pos_input = 0;
 bool pid_enable = 0;
+bool rel_enable = 0;
 
 // 0x38E
 uint16_t output_rod_target = 0;
@@ -286,7 +288,7 @@ uint8_t crc8_lut_1d[256];
 void CAN1_RX0_IRQ_Handler(void) {
   while ((CAN1->RF0R & CAN_RF0R_FMP0) != 0) {
     uint16_t address = CAN1->sFIFOMailBox[0].RIR >> 21;
-    #ifdef DEBUG
+    #ifdef DEBUG_CAN
     puts("CAN1 RX: ");
     puth(address);
     puts("\n");
@@ -316,21 +318,10 @@ void CAN1_RX0_IRQ_Handler(void) {
         if(dat[0] == lut_checksum(dat, 6, crc8_lut_1d)) {
           if (((can1_count_in + 1U) & COUNTER_CYCLE) == index) {
             //if counter and checksum valid accept commands
-            if (!driver_brake_applied) {
-              if(dat[1] >> 4U) { //relative/velocity mode
-                q_target_ext_qf = dat[1] >> 4U;
-                q_target_ext = ((dat[3] << 8U) | dat[2]);
-                pid_enable = 0;
-              }
-              else if (dat[1] >> 5U) { //Position/PID mode
-                pos_input = ((dat[5] & 0xFU) << 8U) | dat[4];
-                pid_enable = 1;
-                q_target_ext_qf = 1;
-              }
-            } else {
-              q_target_ext_qf = 0;
-              q_target_ext = 0x7e00;
-            }
+            pid_enable = ((dat[1] >> 5U) & 1U);
+            rel_enable = ((dat[1] >> 4U) & 1U);
+            pos_input = ((dat[5] & 0xFU) << 8U) | dat[4];
+            rel_input = ((dat[3] << 8U) | dat[2]);
             can1_count_in++;
           }
           else {
@@ -393,7 +384,7 @@ void CAN1_SCE_IRQ_Handler(void) {
 void CAN2_RX0_IRQ_Handler(void) {
   while ((CAN2->RF0R & CAN_RF0R_FMP0) != 0) {
     uint16_t address = CAN2->sFIFOMailBox[0].RIR >> 21;
-    #ifdef DEBUG
+    #ifdef DEBUG_CAN
     puts("CAN2 RX: ");
     puth(address);
     puts("\n");
@@ -454,12 +445,6 @@ void CAN2_RX0_IRQ_Handler(void) {
             ibst_status = (data2 >> 19) & 0x7;
             driver_brake_applied = ((dat2[2] & 0x1) | (!((dat2[2] >> 1) & 0x1))); //Sends brake applied if ibooster says brake applied or if there's a fault with the brake sensor, assumes worst case scenario
             brake_applied = (driver_brake_applied | (output_rod_target > 0x23FU));
-            if(brake_applied) { //Switch brake light relay
-              set_gpio_output(GPIOB, 13, 1);
-            }
-            else {
-              set_gpio_output(GPIOB, 13, 0);
-            }
             can2_count_in_3++;
           }
           else {
@@ -486,7 +471,7 @@ void CAN2_SCE_IRQ_Handler(void) {
 void CAN3_RX0_IRQ_Handler(void) {
   while ((CAN3->RF0R & CAN_RF0R_FMP0) != 0) {
     uint16_t address = CAN3->sFIFOMailBox[0].RIR >> 21;
-    #ifdef DEBUG
+    #ifdef DEBUG_CAN
     puts("CAN1 RX: ");
     puth(address);
     puts("\n");
@@ -505,7 +490,15 @@ void CAN3_SCE_IRQ_Handler(void) {
   llcan_clear_send(CAN3);
 }
 
-#define P 20
+// q_target_ext values
+// 7e00 max rod return
+// 8200 max brake.. TODO: check this?
+
+// position values
+// BC0 max rod position (3008)
+// EC0 min rod position (-320)
+
+#define P 2 // brake_rel is 2x brake_pos scale
 #define I 0
 #define D 0
 
@@ -514,29 +507,62 @@ void CAN3_SCE_IRQ_Handler(void) {
 
 uint16_t last_input;
 int32_t output_sum;
+int16_t error;
 
+int to_signed(int d, int bits) {
+  int d_signed = d;
+  if (d >= (1 << MAX((bits - 1), 0))) {
+    d_signed = d - (1 << MAX(bits, 0));
+  }
+  return d_signed;
+}
 
 void TIM3_IRQ_Handler(void) {
-  if(pid_enable) { //run PID loop
-    int32_t error = pos_input - output_rod_target;
-    //uint16_t d_input = pos_input - last_input;
-    //output_sum += error * I;
-    //if(output_sum > OUTMAX) {
-    //  output_sum = OUTMAX;
-    //}
-    //if(output_sum < OUTMIN) {
-    //  output_sum = OUTMIN;
-    //}
-    uint16_t qtarget_output = error * P;
-    //qtarget_output += output_sum - (d_input * D);
-    if(qtarget_output > OUTMAX) {
-      qtarget_output = OUTMAX;
+
+  if(pid_enable & !rel_enable) { //run PID loop
+    q_target_ext_qf = 1;
+
+    int q_target_out = Q_TARGET_DEFAULT; // this value is the zero point.
+
+    error = to_signed(pos_input, 16) - to_signed(output_rod_target, 16); // position error
+    q_target_out += (error * P);
+
+    if (q_target_out > OUTMAX){
+      q_target_out = OUTMAX;
     }
-    if(qtarget_output < OUTMIN) {
-      qtarget_output = OUTMIN;
+
+    if (q_target_out < OUTMIN){
+      q_target_out = OUTMIN;
     }
-    q_target_ext = qtarget_output;
+
+    q_target_ext = q_target_out;
+
   }
+
+  if (rel_enable && !pid_enable) { //relative mode
+    q_target_ext_qf = 1;
+    q_target_ext = rel_input;
+  }
+
+  if ((!rel_enable && !pid_enable) || (rel_enable && pid_enable)){ //both are 0 or both are 1
+    q_target_ext_qf = 0;
+    q_target_ext = Q_TARGET_DEFAULT;
+    rel_enable = 0;
+    pid_enable = 0;
+    state = FAULT_INVALID;
+  }
+
+  if (brake_applied) { // handle relay
+    set_gpio_output(GPIOB, 13, 1);
+  } else {
+    set_gpio_output(GPIOB, 13, 0);
+  }
+
+  if (driver_brake_applied){ // reset values
+    q_target_ext_qf = 0;
+    q_target_ext = Q_TARGET_DEFAULT;
+  }
+
   // cmain loop for sending 100hz messages
   if ((CAN2->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     uint8_t dat[8]; //sendESP_private3
@@ -561,7 +587,7 @@ void TIM3_IRQ_Handler(void) {
   else {
     // old can packet hasn't sent!
     state = EXTFAULT1_SEND1;
-    #ifdef DEBUG
+    #ifdef DEBUG_CAN
       puts("CAN2 MISS1\n");
     #endif
   }
@@ -592,7 +618,7 @@ void TIM3_IRQ_Handler(void) {
   else {
     // old can packet hasn't sent!
     state = EXTFAULT1_SEND2;
-    #ifdef DEBUG
+    #ifdef DEBUG_CAN
       puts("CAN2 MISS2\n");
     #endif
   }
@@ -624,7 +650,7 @@ void TIM3_IRQ_Handler(void) {
     else {
       // old can packet hasn't sent!
       state = EXTFAULT1_SEND3;
-      #ifdef DEBUG
+      #ifdef DEBUG_CAN
         puts("CAN2 MISS3\n");
       #endif
     }
@@ -636,17 +662,17 @@ void TIM3_IRQ_Handler(void) {
   if ((CAN1->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     uint8_t dat[5];
     brake_ok = (ibst_status == 0x7);
-    dat[2] = (brake_ok) | (driver_brake_applied << 1U) | (brake_applied << 2U) | (output_rod_target & 0x3FU);
-    dat[3] = (output_rod_target >> 8U) & 0x3FU;
-    dat[4] = (can2state & 0xFU) << 4;
 
+    dat[4] = (can2state & 0xFU) << 4;
+    dat[3] = (output_rod_target >> 8U) & 0x3FU;
+    dat[2] = (brake_ok) | (driver_brake_applied << 1U) | (brake_applied << 2U) | (output_rod_target & 0x3FU);
     dat[1] = ((state & 0xFU) << 4) | can1_count_out;
     dat[0] = lut_checksum(dat, 5, crc8_lut_1d);
 
     CAN_FIFOMailBox_TypeDef to_send;
     to_send.RDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
     to_send.RDHR = dat[4];
-    to_send.RDTR = 8;
+    to_send.RDTR = 5;
     to_send.RIR = (0x20F << 21) | 1U;
     can_send(&to_send, 0, false);
 
@@ -657,7 +683,7 @@ void TIM3_IRQ_Handler(void) {
   else {
     // old can packet hasn't sent!
     state = FAULT_SEND;
-    #ifdef DEBUG
+    #ifdef DEBUG_CAN
       puts("CAN1 MISS1\n");
     #endif
   }
@@ -670,12 +696,26 @@ void TIM3_IRQ_Handler(void) {
     state = FAULT_TIMEOUT;
     q_target_ext_qf = 0;
     q_target_ext = Q_TARGET_DEFAULT;
+    pid_enable = 0;
+    rel_enable = 0;
   } else {
     timeout += 1U;
   }
 
   #ifdef DEBUG
-  puts("BRAKE_REQ: ");
+  puts("MODE: ");
+  puth((pid_enable << 1U) | rel_enable);
+  puts(" BRAKE_REQ: ");
+  if (((pid_enable << 1U) | rel_enable) == 2){
+    puth(pos_input);
+    puts(" BRAKE_POS_ERR: ");
+    puth(error);
+  } else {
+    puth(q_target_ext_qf);
+  }
+  puts(" BRAKE_POS: ");
+  puth(output_rod_target);
+  puts(" Q_TARGET_EXT: ");
   puth(q_target_ext);
   puts("\n");
   #endif

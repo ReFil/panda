@@ -102,7 +102,7 @@ bool can_push(can_ring *q, CAN_FIFOMailBox_TypeDef *elem) {
   EXIT_CRITICAL();
   if (!ret) {
     can_overflow_cnt++;
-    #ifdef DEBUG
+    #ifdef DEBUG_CAN
       puts("can_push failed!\n");
     #endif
   }
@@ -184,7 +184,7 @@ void can_flip_buses(uint8_t bus1, uint8_t bus2){
 void can_sce(CAN_TypeDef *CAN) {
   ENTER_CRITICAL();
 
-  #ifdef DEBUG
+  #ifdef DEBUG_CAN
     if (CAN==CAN1) puts("CAN1:  ");
     if (CAN==CAN2) puts("CAN2:  ");
     #ifdef CAN3
@@ -235,13 +235,13 @@ void process_can(uint8_t can_number) {
         }
 
         if ((CAN->TSR & CAN_TSR_TERR0) == CAN_TSR_TERR0) {
-          #ifdef DEBUG
+          #ifdef DEBUG_CAN
             puts("CAN TX ERROR!\n");
           #endif
         }
 
         if ((CAN->TSR & CAN_TSR_ALST0) == CAN_TSR_ALST0) {
-          #ifdef DEBUG
+          #ifdef DEBUG_CAN
             puts("CAN TX ARBITRATION LOST!\n");
           #endif
         }
@@ -333,7 +333,7 @@ bool can_tx_check_min_slots_free(uint32_t min) {
 
 void can_send(CAN_FIFOMailBox_TypeDef *to_push, uint8_t bus_number, bool skip_tx_hook) {
   if (!skip_tx_hook) {
-    #ifdef DEBUG
+    #ifdef DEBUG_CAN
     puts("TX CAN");
     puth2(bus_number);
     puts(" ");
