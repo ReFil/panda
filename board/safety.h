@@ -252,7 +252,7 @@ const safety_hook_config safety_hook_registry[] = {
   {SAFETY_NOOUTPUT, &nooutput_hooks},
   {SAFETY_HYUNDAI_LEGACY, &hyundai_legacy_hooks},
   {SAFETY_OCELOT, &ocelot_hooks},
-#ifdef ALLOW_DEBUG
+//#ifdef ALLOW_DEBUG
   {SAFETY_MAZDA, &mazda_hooks},
   {SAFETY_SUBARU_LEGACY, &subaru_legacy_hooks},
   {SAFETY_VOLKSWAGEN_PQ, &volkswagen_pq_hooks},
@@ -260,7 +260,7 @@ const safety_hook_config safety_hook_registry[] = {
   {SAFETY_ALLOUTPUT, &alloutput_hooks},
   {SAFETY_GM_ASCM, &gm_ascm_hooks},
   {SAFETY_FORD, &ford_hooks},
-#endif
+//#endif
 };
 
 int set_safety_hooks(uint16_t mode, int16_t param) {
