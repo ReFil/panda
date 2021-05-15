@@ -241,6 +241,7 @@ void loop(void) {
 			btns[1] = 0;
 			btns[2] = 0;
 			btns[3] = 0;
+      update_eon();
 	  	}
 
 	  }
