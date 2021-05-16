@@ -26,8 +26,8 @@
 
 #define CAN CAN1
 
-//#define ADCE
-#define ENCODER
+#define ADCE
+//#define ENCODER
 //#define BUTTONS
 
 
@@ -210,7 +210,7 @@ void update_eon(void) {
 
   // blink the LED
   current_board->set_led(LED_GREEN, led_value);
-  led_value = !led_value;
+  //led_value = !led_value;
 
   TIM3->SR = 0;
 
@@ -246,82 +246,82 @@ void loop(void) {
 	  		adcbuttontriggered = false;
 	  		adcbuttoncounter = 0;
 	  		btns[0] = 0;
-			btns[1] = 0;
-			btns[2] = 0;
-			btns[3] = 0;
-      update_eon();
+  			btns[1] = 0;
+  			btns[2] = 0;
+  			btns[3] = 0;
+        update_eon();
+        led_value = !led_value;
 	  	}
 
 	  }
 	  else if((value > 110) && (value < 200)) {	//Increase speed
 	  	btns[0] = 0;
-		btns[1] = 0;
-		btns[2] = 1;
-		btns[3] = 0;
+  		btns[1] = 0;
+  		btns[2] = 1;
+  		btns[3] = 0;
 	    adcbuttontriggered = true;
 	    adcbuttoncounter = 0;
 	  }
 	  else if((value > 260) && (value < 340)) {	//Decrease speed
 	  	btns[0] = 0;
-		btns[1] = 0;
-		btns[2] = 0;
-		btns[3] = 1;
+  		btns[1] = 0;
+  		btns[2] = 0;
+  		btns[3] = 1;
 	    adcbuttontriggered = true;
 	    adcbuttoncounter = 0;
 	  }
 	  else if((value > 600) && (value < 670)) {	//Cruise set/cancel
 	   	btns[0] = 1;
-		btns[1] = 0;
-		btns[2] = 0;
-		btns[3] = 0;
+  		btns[1] = 0;
+  		btns[2] = 0;
+  		btns[3] = 0;
 	    adcbuttontriggered = true;
 	    adcbuttoncounter = 0;
 	  }
 	#endif
-  btns[0] = 0;
-  btns[1] = 0;
-  btns[2] = 0;
-  btns[3] = 0;
 
 	#ifdef ENCODER
+      btns[0] = 0;
+      btns[1] = 0;
+      btns[2] = 0;
+      btns[3] = 0;
+    currentState = get_gpio_input(GPIOA, 8);
+    // If last and current state of CLK are different, then pulse occurred
+    // React to only 1 state change to avoid double count
+    if (currentState != lastState) {
 
+    // If the DT state is different than the CLK state then
+    // the encoder is rotating CCW so decrement
+    if (get_gpio_input(GPIOA, 9) != currentState) {
+      btns[2] = 0;
+      btns[3] = 1;
+    }
+    else {
+      // Encoder is rotating CW so increment
+      btns[2] = 1;
+      btns[3] = 0;
+    }
+    update_eon();
+    uint32_t startTick = DWT->CYCCNT,
+    delayTicks = 100 * 4800;
 
-
-  currentState = get_gpio_input(GPIOA, 8);
-  // If last and current state of CLK are different, then pulse occurred
-  // React to only 1 state change to avoid double count
-  if (currentState != lastState) {
-
-  // If the DT state is different than the CLK state then
-  // the encoder is rotating CCW so decrement
-  if (get_gpio_input(GPIOA, 9) != currentState) {
+    while (DWT->CYCCNT - startTick < delayTicks);
     btns[2] = 0;
-    btns[3] = 1;
-  }
-  else {
-    // Encoder is rotating CW so increment
-    btns[2] = 1;
     btns[3] = 0;
+    update_eon();
+    }
 
-  }
-  update_eon();
-  uint32_t startTick = DWT->CYCCNT,
-  delayTicks = 100 * 4800;
-
-  while (DWT->CYCCNT - startTick < delayTicks);
-  btns[2] = 0;
-  btns[3] = 0;
-  update_eon();
-
-  }
-
-  // Remember last CLK state
+    // Remember last CLK state
     lastState = currentState;
 	  btns[0] = !get_gpio_input(GPIOA, 10);
 	  //btns[1] = !get_gpio_input(GPIOC, 0);
 	#endif
 
 	#ifdef BUTTONS
+      btns[0] = 0;
+      btns[1] = 0;
+      btns[2] = 0;
+      btns[3] = 0;
 	  btns[0] = !get_gpio_input(GPIOA, 8);
 	  btns[1] = !get_gpio_input(GPIOC, 0);
 	  btns[2] = !get_gpio_input(GPIOA, 10);
@@ -332,6 +332,7 @@ void loop(void) {
 		btns[0] = 0;
 		btns[1] = 1; //cancel instead
 	}
+
 	if(btns[0] != oldbtns[0] || btns[1] != oldbtns[1] || btns[2] != oldbtns[2] || btns[3] != oldbtns[3]) {//if button values have changed
 		#ifdef ENCODER
 			update_eon(); //send new button values to eon
@@ -339,7 +340,6 @@ void loop(void) {
 		#ifdef BUTTONS
 			update_eon(); //send new button values to eon
 		#endif
-
 	}
 
 	oldbtns[0] = btns[0];
