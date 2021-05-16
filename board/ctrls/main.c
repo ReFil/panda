@@ -230,7 +230,6 @@ void TIM3_IRQ_Handler(void) {
 uint16_t counter = 0;
 bool lastState;
 bool currentState;
-bool adcReset;
 
 // ***************************** main code *****************************
 
@@ -239,10 +238,10 @@ void loop(void) {
 	  uint16_t value;
 	  value = adc_get(ADCCHAN_ACCEL0);
 
-	  if((value < 110) | adcReset) {
-	  	if(adcbuttontriggered ^ adcReset){adcbuttoncounter++;}
+	  if(value < 110) {
+	  	if(adcbuttontriggered){adcbuttoncounter++;}
 
-	  	if((adcbuttoncounter > 65000)){
+	  	if(adcbuttoncounter > 65000){
         if(adcbuttontriggered){
 	  		update_eon();
 	  		adcbuttontriggered = false;
@@ -251,18 +250,8 @@ void loop(void) {
   			btns[1] = 0;
   			btns[2] = 0;
   			btns[3] = 0;
-        adcReset = true;
-        //uint16_t i = 0
-        //while (i < 65534) {
-        //  i++;
-        //}
-        //update_eon();
         led_value = !led_value;
 	  	  }
-        else if(adcReset){
-          update_eon();
-          adcReset = false;
-        }
     }
 
 	  }
@@ -369,7 +358,7 @@ int main(void) {
 	REGISTER_INTERRUPT(CAN1_TX_IRQn, CAN1_TX_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
 	REGISTER_INTERRUPT(CAN1_RX0_IRQn, CAN1_RX0_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
 	REGISTER_INTERRUPT(CAN1_SCE_IRQn, CAN1_SCE_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
-  //REGISTER_INTERRUPT(TIM3_IRQn, TIM3_IRQ_Handler, 1000U, FAULT_INTERRUPT_RATE_TIM3)
+  REGISTER_INTERRUPT(TIM3_IRQn, TIM3_IRQ_Handler, 1000U, FAULT_INTERRUPT_RATE_TIM3)
 
 
 	// Should run at around 732Hz (see init below)
@@ -418,8 +407,8 @@ int main(void) {
   }
 
 	// 48mhz / 65536 ~= 732
-  //timer_init(TIM3, 21);
-  //NVIC_EnableIRQ(TIM3_IRQn);
+  timer_init(TIM3, 18);
+  NVIC_EnableIRQ(TIM3_IRQn);
 
 
 	btns[0] = 0;
