@@ -407,7 +407,7 @@ int main(void) {
   }
 
 	// 48mhz / 65536 ~= 732
-  timer_init(TIM3, 18);
+  timer_init(TIM3, 19);
   NVIC_EnableIRQ(TIM3_IRQn);
 
 
