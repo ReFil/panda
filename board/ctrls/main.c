@@ -215,7 +215,7 @@ void update_eon(void) {
 
 
 void TIM3_IRQ_Handler(void) {
-  //update_eon();
+  update_eon();
 }
 
 uint16_t counter = 0;
@@ -242,11 +242,6 @@ void loop(void) {
   			btns[2] = 0;
   			btns[3] = 0;
         led_value = !led_value;
-        uint32_t startTick = DWT->CYCCNT,
-        delayTicks = 100 * 4800;
-
-        while (DWT->CYCCNT - startTick < delayTicks);
-        update_eon();
 	  	  }
     }
 
@@ -354,7 +349,7 @@ int main(void) {
 	REGISTER_INTERRUPT(CAN1_TX_IRQn, CAN1_TX_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
 	REGISTER_INTERRUPT(CAN1_RX0_IRQn, CAN1_RX0_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
 	REGISTER_INTERRUPT(CAN1_SCE_IRQn, CAN1_SCE_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
-  //REGISTER_INTERRUPT(TIM3_IRQn, TIM3_IRQ_Handler, 1000U, FAULT_INTERRUPT_RATE_TIM3)
+  REGISTER_INTERRUPT(TIM3_IRQn, TIM3_IRQ_Handler, 1000U, FAULT_INTERRUPT_RATE_TIM3)
 
 
 	// Should run at around 732Hz (see init below)
@@ -403,8 +398,8 @@ int main(void) {
   }
 
 	// 48mhz / 65536 ~= 732
-  //timer_init(TIM3, 19);
-  //NVIC_EnableIRQ(TIM3_IRQn);
+  timer_init(TIM3, 19);
+  NVIC_EnableIRQ(TIM3_IRQn);
 
 
 	btns[0] = 0;
