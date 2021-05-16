@@ -224,12 +224,13 @@ void update_eon(void) {
 
 
 void TIM3_IRQ_Handler(void) {
-
+  //update_eon();
 }
 
 uint16_t counter = 0;
 bool lastState;
 bool currentState;
+bool adcReset;
 
 // ***************************** main code *****************************
 
@@ -238,10 +239,11 @@ void loop(void) {
 	  uint16_t value;
 	  value = adc_get(ADCCHAN_ACCEL0);
 
-	  if(value < 110) {
-	  	if(adcbuttontriggered){adcbuttoncounter++;}
+	  if((value < 110) | adcReset) {
+	  	if(adcbuttontriggered ^ adcReset){adcbuttoncounter++;}
 
-	  	if(adcbuttoncounter > 65000){
+	  	if((adcbuttoncounter > 65000)){
+        if(adcbuttontriggered){
 	  		update_eon();
 	  		adcbuttontriggered = false;
 	  		adcbuttoncounter = 0;
@@ -249,13 +251,19 @@ void loop(void) {
   			btns[1] = 0;
   			btns[2] = 0;
   			btns[3] = 0;
+        adcReset = true;
         //uint16_t i = 0
         //while (i < 65534) {
         //  i++;
         //}
         //update_eon();
         led_value = !led_value;
-	  	}
+	  	  }
+        else if(adcReset){
+          update_eon();
+          adcReset = false;
+        }
+    }
 
 	  }
 	  else if((value > 110) && (value < 200)) {	//Increase speed
@@ -410,7 +418,7 @@ int main(void) {
   }
 
 	// 48mhz / 65536 ~= 732
-  //timer_init(TIM3, 15);
+  //timer_init(TIM3, 21);
   //NVIC_EnableIRQ(TIM3_IRQn);
 
 
