@@ -249,6 +249,10 @@ void loop(void) {
   			btns[1] = 0;
   			btns[2] = 0;
   			btns[3] = 0;
+        uint16_t i = 0
+        while (i < 65534) {
+          i++;
+        }
         update_eon();
         led_value = !led_value;
 	  	}
