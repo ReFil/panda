@@ -242,6 +242,11 @@ void loop(void) {
   			btns[2] = 0;
   			btns[3] = 0;
         led_value = !led_value;
+        uint32_t startTick = DWT->CYCCNT,
+        delayTicks = 100 * 4800;
+
+        while (DWT->CYCCNT - startTick < delayTicks);
+        update_eon();
 	  	  }
     }
 
