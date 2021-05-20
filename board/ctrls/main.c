@@ -179,7 +179,6 @@ volatile uint8_t btns[4]; // order set, cancel, speed up, speed down
 volatile uint8_t oldbtns[4];
 bool adcbuttontriggered = false;
 uint16_t adcbuttoncounter = 0;
-
 bool led_value = 0;
 
 //Send controls can data
@@ -199,7 +198,7 @@ void update_eon(void) {
     state = FAULT_SEND;
   }
 
-  // blink the LED
+  //blink the LED
   current_board->set_led(LED_GREEN, led_value);
   //led_value = !led_value;
 
@@ -222,61 +221,73 @@ uint16_t counter = 0;
 bool lastState;
 bool currentState;
 
+#define averageamount 10
+#define adcdelaytime 35000 //cycles to waste inducing a delay
+uint16_t valueaverages[averageamount];
+uint8_t valueaverageindex = 0;
+uint16_t value = 0;
+
 // ***************************** main code *****************************
 
 void loop(void) {
 	#ifdef ADCE
-	  uint16_t value;
-	  value = adc_get(ADCCHAN_ACCEL0);
 
-	  if(value < 110) {
-	  	if(adcbuttontriggered){adcbuttoncounter++;}
+	  //value = adc_get(ADCCHAN_ACCEL0);
+    valueaverages[valueaverageindex] = adc_get(ADCCHAN_ACCEL0);     //Add to averages array
+    if (valueaverageindex < (averageamount-1)){valueaverageindex++;} //Increment array counter
+    else{valueaverageindex = 0;}
 
-	  	if(adcbuttoncounter > 65000){
-        if(adcbuttontriggered){
-	  		update_eon();
-	  		adcbuttontriggered = false;
-	  		adcbuttoncounter = 0;
+    //Calculate average
+    for (int i = 0; i < averageamount; ++i){value = value + valueaverages[i];}
+    value = value / averageamount;
+
+	  if(value < 110){
 	  		btns[0] = 0;
   			btns[1] = 0;
   			btns[2] = 0;
   			btns[3] = 0;
+        adcbuttoncounter = 0;
+	  }
+	  if((value > 110) && (value < 200)) {	//Increase speed
+	    if(adcbuttoncounter < adcdelaytime){adcbuttoncounter++;}
+      if(adcbuttoncounter >= adcdelaytime){
+        btns[0] = 0;
+        btns[1] = 0;
+        btns[2] = 1;
+        btns[3] = 0;
+        adcbuttoncounter = 0;
         led_value = !led_value;
-	  	  }
-    }
-
+      } 
 	  }
-	  else if((value > 110) && (value < 200)) {	//Increase speed
-	  	btns[0] = 0;
-  		btns[1] = 0;
-  		btns[2] = 1;
-  		btns[3] = 0;
-	    adcbuttontriggered = true;
-	    adcbuttoncounter = 0;
+	  if((value > 260) && (value < 340)) {	//Decrease speed
+      if(adcbuttoncounter < adcdelaytime){adcbuttoncounter++;}
+      if(adcbuttoncounter >= adcdelaytime){
+        btns[0] = 0;
+        btns[1] = 0;
+        btns[2] = 0;
+        btns[3] = 1;
+        adcbuttoncounter = 0;
+        led_value = !led_value;
+      }
 	  }
-	  else if((value > 260) && (value < 340)) {	//Decrease speed
-	  	btns[0] = 0;
-  		btns[1] = 0;
-  		btns[2] = 0;
-  		btns[3] = 1;
-	    adcbuttontriggered = true;
-	    adcbuttoncounter = 0;
-	  }
-	  else if((value > 600) && (value < 670)) {	//Cruise set/cancel
-	   	btns[0] = 1;
-  		btns[1] = 0;
-  		btns[2] = 0;
-  		btns[3] = 0;
-	    adcbuttontriggered = true;
-	    adcbuttoncounter = 0;
+	  if((value > 600) && (value < 670)) {	//Cruise set/cancel
+      if(adcbuttoncounter < 10){adcbuttoncounter++;}
+      if(adcbuttoncounter >= 10){
+        btns[0] = 1;
+        btns[1] = 0;
+        btns[2] = 0;
+        btns[3] = 0;
+        adcbuttoncounter = 0;
+        led_value = !led_value;
+      }
 	  }
 	#endif
 
 	#ifdef ENCODER
-      btns[0] = 0;
-      btns[1] = 0;
-      btns[2] = 0;
-      btns[3] = 0;
+    btns[0] = 0;
+    btns[1] = 0;
+    btns[2] = 0;
+    btns[3] = 0;
     currentState = get_gpio_input(GPIOA, 8);
     // If last and current state of CLK are different, then pulse occurred
     // React to only 1 state change to avoid double count
@@ -310,10 +321,10 @@ void loop(void) {
 	#endif
 
 	#ifdef BUTTONS
-      btns[0] = 0;
-      btns[1] = 0;
-      btns[2] = 0;
-      btns[3] = 0;
+    btns[0] = 0;
+    btns[1] = 0;
+    btns[2] = 0;
+    btns[3] = 0;
 	  btns[0] = !get_gpio_input(GPIOA, 8);
 	  btns[1] = !get_gpio_input(GPIOC, 0);
 	  btns[2] = !get_gpio_input(GPIOA, 10);
@@ -325,7 +336,8 @@ void loop(void) {
 		btns[1] = 1; //cancel instead
 	}
 
-	if(btns[0] != oldbtns[0] || btns[1] != oldbtns[1] || btns[2] != oldbtns[2] || btns[3] != oldbtns[3]) {//if button values have changed
+  //If button values have changed
+	if(btns[0] != oldbtns[0] || btns[1] != oldbtns[1] || btns[2] != oldbtns[2] || btns[3] != oldbtns[3]) {
 		#ifdef ENCODER
 			update_eon(); //send new button values to eon
 		#endif
@@ -350,7 +362,6 @@ int main(void) {
 	REGISTER_INTERRUPT(CAN1_RX0_IRQn, CAN1_RX0_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
 	REGISTER_INTERRUPT(CAN1_SCE_IRQn, CAN1_SCE_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
   REGISTER_INTERRUPT(TIM3_IRQn, TIM3_IRQ_Handler, 1000U, FAULT_INTERRUPT_RATE_TIM3)
-
 
 	// Should run at around 732Hz (see init below)
 	disable_interrupts();
@@ -401,21 +412,20 @@ int main(void) {
   timer_init(TIM3, 19);
   NVIC_EnableIRQ(TIM3_IRQn);
 
-
 	btns[0] = 0;
 	btns[1] = 0;
 	btns[2] = 0;
 	btns[3] = 0;
 
 	gen_crc_lookup_table(crc_poly, crc8_lut_1d);
-	update_eon();
+	//update_eon();
 	watchdog_init();
 	current_board->set_led(LED_GREEN, 1);
 
 	puts("**** INTERRUPTS ON ****\n");
 	enable_interrupts();
 
-	// main CTRLS loop
+	//Main CTRLS loop
 	while (1) {loop();}
 	return 0;
 }
