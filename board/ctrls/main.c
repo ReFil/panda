@@ -271,15 +271,15 @@ void loop(void) {
       }
 	  }
 	  if((value > 600) && (value < 670)) {	//Cruise set/cancel
-      if(adcbuttoncounter < 10){adcbuttoncounter++;}
-      if(adcbuttoncounter >= 10){
+      //if(adcbuttoncounter < 10){adcbuttoncounter++;}
+      //if(adcbuttoncounter >= 10){
         btns[0] = 1;
         btns[1] = 0;
         btns[2] = 0;
         btns[3] = 0;
-        adcbuttoncounter = 0;
-        led_value = !led_value;
-      }
+        //adcbuttoncounter = 0;
+        //led_value = !led_value;
+      //}
 	  }
 	#endif
 
