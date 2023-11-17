@@ -22,6 +22,9 @@
 #ifdef IBST
   #include "boards/ibst.h"
 #endif
+#ifdef KOMBI
+  #include "boards/kombi.h"
+#endif
 
 void detect_board_type(void) {
   #ifdef PANDA
@@ -57,9 +60,14 @@ void detect_board_type(void) {
       hw_type = HW_TYPE_IBST;
       current_board = &board_ibst;
     #else
+    #ifdef KOMBI
+      hw_type = HW_TYPE_KOMBI;
+      current_board = &board_kombi;
+    #else
       hw_type = HW_TYPE_UNKNOWN;
       puts("Hardware type is UNKNOWN!\n");
     #endif
+  #endif
   #endif
   #endif
   #endif
