@@ -1,4 +1,4 @@
-// ********************* Includes *********************
+// includes
 #include "../config.h"
 #include "libc.h"
 
