@@ -46,6 +46,7 @@ struct board {
 #define HW_TYPE_DOS 6U
 #define HW_TYPE_CTRLS 7U
 #define HW_TYPE_IBST 8U
+#define HW_TYPE_KOMBI 9U
 
 // LED colors
 #define LED_RED 0U

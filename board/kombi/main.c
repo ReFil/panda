@@ -203,7 +203,7 @@ uint16_t intermediary_rpm;
 uint8_t scaled_rpm;
 
 
-
+ // ECU/SAM CANBUS
 void CAN1_RX0_IRQ_Handler(void) {
   while ((CAN1->RF0R & CAN_RF0R_FMP0) != 0) {
     CAN_FIFOMailBox_TypeDef to_send;
@@ -246,7 +246,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         puth(scaled_rpm);
         puts("\n");
         #endif
-        //Forward message unmolested
+        //Forward message unmolested to cluster and abs
         
         to_send.RDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
         to_send.RDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
