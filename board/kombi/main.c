@@ -267,7 +267,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         to_send.RDTR = 8;
         to_send.RIR = (0x300 << 21) | 1U;
         can_send(&to_send, 1, false);
-        //forward message to bus with original rpm (probably unnecessary)
+        //forward message to ESP bus with original rpm (probably unnecessary)
         to_send.RDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
         can_send(&to_send, 2, false);
         break;
@@ -292,6 +292,8 @@ void CAN1_SCE_IRQ_Handler(void) {
   llcan_clear_send(CAN1);
 }
 
+
+//CLUSTER CAN
 void CAN2_RX0_IRQ_Handler(void) {
   //All messages from cluster shoot through to both buses no fuckery
   while ((CAN2->RF0R & CAN_RF0R_FMP0) != 0) {
@@ -319,6 +321,8 @@ void CAN2_SCE_IRQ_Handler(void) {
   llcan_clear_send(CAN2);
 }
 
+
+//ESP CANBUS
 void CAN3_RX0_IRQ_Handler(void) {
   while ((CAN3->RF0R & CAN_RF0R_FMP0) != 0) {
     uint16_t address = CAN3->sFIFOMailBox[0].RIR >> 21;
