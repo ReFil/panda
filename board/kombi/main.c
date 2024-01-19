@@ -23,6 +23,7 @@
 // uncomment for usb debugging via debug_console.py
 #define KOMBI_USB
 #define DEBUG
+//#define DEBUG_CAN
 
 #ifdef KOMBI_USB
   #include "drivers/uart.h"
@@ -265,7 +266,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         to_send.RDLR = dat[0] | (dat[1] << 8) | (scaled_rpm << 16) | (dat[3] << 24);
         to_send.RDHR = dat[4] | (dat[5] << 8) | (dat[6] << 16) | (dat[7] << 24);
         to_send.RDTR = 8;
-        to_send.RIR = (0x300 << 21) | 1U;
+        to_send.RIR = (0x190 << 21) | 1U;
         can_send(&to_send, 1, false);
         //forward message to ESP bus with original rpm (probably unnecessary)
         to_send.RDLR = dat[0] | (dat[1] << 8) | (dat[2] << 16) | (dat[3] << 24);
