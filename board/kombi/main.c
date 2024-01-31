@@ -23,7 +23,7 @@
 // uncomment for usb debugging via debug_console.py
 #define KOMBI_USB
 #define DEBUG
-//#define DEBUG_CAN
+#define DEBUG_CAN
 
 #ifdef KOMBI_USB
   #include "drivers/uart.h"
@@ -300,7 +300,7 @@ void CAN2_RX0_IRQ_Handler(void) {
   while ((CAN2->RF0R & CAN_RF0R_FMP0) != 0) {
     #ifdef DEBUG_CAN
     puts("CAN2 RX: ");
-    puth(address);
+    //puth(address);
     puts("\n");
     #endif
     
