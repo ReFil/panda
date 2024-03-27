@@ -199,8 +199,8 @@ void CAN3_TX_IRQ_Handler(void) {
 
 bool sent;
 
-uint32_t rpm;
-float intermediary_rpm;
+uint16_t rpm;
+uint16_t intermediary_rpm;
 uint8_t scaled_rpm;
 
 
@@ -235,7 +235,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         for (int i=0; i<8; i++) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
-        rpm = (dat[1] << 8) | dat[2]; //Read RPM signal
+        rpm = dat[1] | (uint16_t)(dat[2] << 8); //Read RPM signal
         intermediary_rpm = (rpm/364) * 255; //Scale RPM signal for our purposes
         scaled_rpm = intermediary_rpm/25; //Apply DBC scale factor for cluster
         #ifdef DEBUG_CAN
