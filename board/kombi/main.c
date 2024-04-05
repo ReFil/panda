@@ -237,7 +237,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         }
         rpm = dat[2] | (uint16_t)(dat[1] << 8); //Read RPM signal
         intermediary_rpm = (rpm/364) * 255; //Scale RPM signal for our purposes
-        scaled_rpm = intermediary_rpm/25; //Apply DBC scale factor for cluster
+        scaled_rpm = intermediary_rpm/25 + 12; //Apply DBC scale factor for cluster
         #ifdef DEBUG_CAN
         puts("Decoded RPM: ");
         puth(rpm);
