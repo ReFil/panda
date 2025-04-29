@@ -236,8 +236,12 @@ void CAN1_RX0_IRQ_Handler(void) {
           dat[i] = GET_BYTE(&CAN1->sFIFOMailBox[0], i);
         }
         rpm = dat[2] | (uint16_t)(dat[1] << 8); //Read RPM signal
-        intermediary_rpm = (rpm/364) * 255; //Scale RPM signal for our purposes
-        scaled_rpm = intermediary_rpm/25 + 12; //Apply DBC scale factor for cluster
+        intermediary_rpm = ((rpm/364) * 255 ); //Scale RPM signal for our purposes 9000rpm - 6300
+        //intermediary_rpm = ((rpm/403) * 255); //Scale RPM signal for our purposes 9950rpm - 6300
+
+        scaled_rpm = intermediary_rpm/25  + 12; //Apply DBC scale factor for cluster
+        if(rpm>9000)
+          scaled_rpm = 255;
         #ifdef DEBUG_CAN
         puts("Decoded RPM: ");
         puth(rpm);
